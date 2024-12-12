@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
-import { databaseConfig } from './config/database.config';
+import { PrismaModule } from './prisma/prisma.module';
+import configuration from './config/configuration';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      load: [configuration]
     }),
-    TypeOrmModule.forRoot(databaseConfig),
+    PrismaModule,
   ],
   controllers: [],
   providers: [],
