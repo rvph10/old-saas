@@ -6,7 +6,7 @@ export default () => ({
   port: parseInt(process.env.PORT, 10) || 3000,
   jwt: {
     secret: process.env.JWT_SECRET,
-    expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+    expiresIn: process.env.JWT_EXPIRES_IN || "1d",
   },
   email: {
     host: process.env.EMAIL_HOST,
@@ -17,5 +17,5 @@ export default () => ({
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-  }
+  },
 });
