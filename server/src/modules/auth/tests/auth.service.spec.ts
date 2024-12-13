@@ -4,6 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { SessionService } from '../session.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -28,6 +29,11 @@ describe('AuthService', () => {
     sign: jest.fn(),
   };
 
+  const mockSessionService = {
+    createSession: jest.fn(),
+    destroySession: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -39,6 +45,10 @@ describe('AuthService', () => {
         {
           provide: JwtService,
           useValue: mockJwtService,
+        },
+        {
+          provide: SessionService,
+          useValue: mockSessionService,
         },
       ],
     }).compile();
@@ -54,14 +64,16 @@ describe('AuthService', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    
-    jest.spyOn(service, 'checkIfUserExists').mockImplementation(async (data) => {
-      const result = await mockPrismaService.user.findFirst();
-      if (!result) {
-        return null;
-      }
-      return result;
-    });
+
+    jest
+      .spyOn(service, 'checkIfUserExists')
+      .mockImplementation(async (data) => {
+        const result = await mockPrismaService.user.findFirst();
+        if (!result) {
+          return null;
+        }
+        return result;
+      });
   });
 
   describe('register', () => {
@@ -235,6 +247,51 @@ describe('AuthService', () => {
       await expect(service.addLoginAttempt(loginAttemptData)).rejects.toThrow(
         'User does not exist',
       );
+    });
+  });
+
+  describe('login with session', () => {
+    it('should create session on successful login', async () => {
+      const loginDto = {
+        username: 'testuser',
+        password: 'password123',
+      };
+
+      const user = {
+        id: '1',
+        username: loginDto.username,
+        password: 'hashedPassword',
+        email: 'test@example.com',
+      };
+
+      mockPrismaService.user.findFirst.mockResolvedValue(user);
+      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+      mockJwtService.sign.mockReturnValue('jwt_token');
+      mockSessionService.createSession.mockResolvedValue('session-id');
+
+      const result = await service.login({
+        loginDto,
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+      });
+
+      expect(result).toHaveProperty('sessionId');
+      expect(mockSessionService.createSession).toHaveBeenCalledWith(
+        user.id,
+        expect.objectContaining({
+          ipAddress: '127.0.0.1',
+          userAgent: 'test-agent',
+        }),
+      );
+    });
+  });
+
+  describe('logout', () => {
+    it('should destroy session on logout', async () => {
+      const sessionId = 'test-session';
+      await service.logout(sessionId);
+
+      expect(mockSessionService.destroySession).toHaveBeenCalledWith(sessionId);
     });
   });
 });

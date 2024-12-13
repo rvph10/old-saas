@@ -8,12 +8,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
+import { SessionService } from './session.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private sessionService: SessionService,
   ) {}
 
   /**
@@ -72,7 +74,7 @@ export class AuthService {
   }) {
     if (!data.userId) throw new Error('User id is required');
     if (!data.ipAddress) throw new Error('IP Address is required');
-    
+
     const userExists = await this.checkIfUserExists({ id: data.userId });
     if (!userExists) {
       throw new Error('User does not exist');
@@ -151,7 +153,19 @@ export class AuthService {
       success: isPasswordValid,
     });
 
-    return this.generateToken(user);
+    const sessionId = await this.sessionService.createSession(user.id, {
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
+      lastActivity: new Date().toISOString(),
+    });
+
+    const token = this.generateToken(user);
+    return { ...token, sessionId };
+  }
+
+  async logout(sessionId: string) {
+    await this.sessionService.destroySession(sessionId);
+    return { message: 'Logged out successfully' };
   }
 
   async register(registerDto: RegisterDto) {

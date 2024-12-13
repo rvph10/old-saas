@@ -1,12 +1,28 @@
-import { Body, Controller, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Param,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+  Headers,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { Throttle } from '@nestjs/throttler';
+import { JwtAuthGuard } from './guard/jwt-auth.guard';
+import { SessionService } from './session.service';
+
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private sessionService: SessionService,
+  ) {}
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
@@ -14,8 +30,28 @@ export class AuthController {
     return this.authService.login({
       loginDto,
       ipAddress: request.ip,
-      userAgent: request.get('user-agent') || 'unknown',
+      userAgent: request.headers['user-agent'] || 'unknown',
     });
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  async logout(@Headers('session-id') sessionId: string) {
+    return this.authService.logout(sessionId);
+  }
+
+  @Delete('sessions/:sessionId')
+  @UseGuards(JwtAuthGuard)
+  async terminateSession(
+    @Param('sessionId') sessionId: string,
+    @Req() req: Request & { user: any },
+  ) {
+    const session = await this.sessionService.getSession(sessionId);
+    if (session?.userId === req.user.id) {
+      await this.sessionService.destroySession(sessionId);
+      return { message: 'Session terminated successfully' };
+    }
+    throw new UnauthorizedException();
   }
 
   @Post('register')
