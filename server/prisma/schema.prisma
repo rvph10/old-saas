@@ -8,14 +8,104 @@ datasource db {
 }
 
 model User {
-  id       String   @id @default(uuid())
-  email    String   @unique
-  username String   @unique
-  password String
-  firstName String?
-  lastName  String?
-  birthDate DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String    @id @default(uuid())
+  email           String    @unique
+  username        String    @unique
+  password        String
+  firstName       String?
+  lastName        String?
+  birthDate       DateTime?
+  phoneNumber     String?
+  isEmailVerified Boolean   @default(false)
+  isPhoneVerified Boolean   @default(false)
+
+  // Business related fields
+  companyName String?
+  vatNumber   String?
+
+  // Relations
+  role         Role           @relation(fields: [roleId], references: [id])
+  roleId       String
+  subscription Subscription?
+  billingInfo  BillingInfo?
+  loginHistory LoginHistory[]
+
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  permissions Json
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Subscription {
+  id         String             @id @default(uuid())
+  userId     String             @unique
+  user       User               @relation(fields: [userId], references: [id])
+  planId     String
+  plan       Plan               @relation(fields: [planId], references: [id])
+  status     SubscriptionStatus
+  startDate  DateTime           @default(now())
+  endDate    DateTime?
+  canceledAt DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+}
+
+model Plan {
+  id            String          @id @default(uuid())
+  name          String          @unique
+  description   String
+  price         Float
+  currency      String          @default("EUR")
+  interval      BillingInterval
+  features      Json
+  subscriptions Subscription[]
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model BillingInfo {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String?
+  postalCode   String
+  country      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model LoginHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  ipAddress String
+  userAgent String
+  success   Boolean
+  createdAt DateTime @default(now())
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  EXPIRED
+  PENDING
+  SUSPENDED
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
 }

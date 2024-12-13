@@ -5,8 +5,8 @@ import {
   IsOptional,
   IsDate,
   Matches,
-} from "class-validator";
-import { Type } from "class-transformer";
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class RegisterDto {
   @IsEmail()
@@ -20,7 +20,7 @@ export class RegisterDto {
   @MinLength(8)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
     message:
-      "Password must contain uppercase, lowercase, number and special character",
+      'Password must contain uppercase, lowercase, number and special character',
   })
   password: string;
 

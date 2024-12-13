@@ -1,11 +1,11 @@
-import { Test, TestingModule } from "@nestjs/testing";
-import { AuthService } from "../auth.service";
-import { PrismaService } from "../../../prisma/prisma.service";
-import { JwtService } from "@nestjs/jwt";
-import { ConflictException, UnauthorizedException } from "@nestjs/common";
-import * as bcrypt from "bcrypt";
+import { Test, TestingModule } from '@nestjs/testing';
+import { AuthService } from '../auth.service';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { JwtService } from '@nestjs/jwt';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 
-describe("AuthService", () => {
+describe('AuthService', () => {
   let service: AuthService;
   let prismaService: PrismaService;
   let jwtService: JwtService;
@@ -41,30 +41,30 @@ describe("AuthService", () => {
     jwtService = module.get<JwtService>(JwtService);
   });
 
-  describe("register", () => {
+  describe('register', () => {
     const registerDto = {
-      email: "test@example.com",
-      username: "testuser",
-      password: "password123",
-      firstName: "Test",
-      lastName: "User",
+      email: 'test@example.com',
+      username: 'testuser',
+      password: 'password123',
+      firstName: 'Test',
+      lastName: 'User',
     };
 
-    it("should register a new user successfully", async () => {
-      const hashedPassword = "hashedPassword";
-      jest.spyOn(bcrypt, "hash").mockResolvedValue(hashedPassword as never);
+    it('should register a new user successfully', async () => {
+      const hashedPassword = 'hashedPassword';
+      jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
       mockPrismaService.user.findFirst.mockResolvedValue(null);
       mockPrismaService.user.create.mockResolvedValue({
         ...registerDto,
-        id: "1",
+        id: '1',
         password: hashedPassword,
       });
-      mockJwtService.sign.mockReturnValue("jwt_token");
+      mockJwtService.sign.mockReturnValue('jwt_token');
 
       const result = await service.register(registerDto);
 
-      expect(result).toHaveProperty("access_token");
-      expect(result).toHaveProperty("user");
+      expect(result).toHaveProperty('access_token');
+      expect(result).toHaveProperty('user');
       expect(mockPrismaService.user.create).toHaveBeenCalledWith({
         data: {
           ...registerDto,
@@ -73,8 +73,8 @@ describe("AuthService", () => {
       });
     });
 
-    it("should throw ConflictException if user already exists", async () => {
-      mockPrismaService.user.findFirst.mockResolvedValue({ id: "1" });
+    it('should throw ConflictException if user already exists', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue({ id: '1' });
 
       await expect(service.register(registerDto)).rejects.toThrow(
         ConflictException,
@@ -82,42 +82,42 @@ describe("AuthService", () => {
     });
   });
 
-  describe("login", () => {
+  describe('login', () => {
     const loginDto = {
-      username: "testuser",
-      password: "password123",
+      username: 'testuser',
+      password: 'password123',
     };
 
-    it("should login successfully with correct credentials", async () => {
+    it('should login successfully with correct credentials', async () => {
       const user = {
-        id: "1",
+        id: '1',
         username: loginDto.username,
-        password: "hashedPassword",
-        email: "test@example.com",
+        password: 'hashedPassword',
+        email: 'test@example.com',
       };
 
       mockPrismaService.user.findFirst.mockResolvedValue(user);
-      jest.spyOn(bcrypt, "compare").mockResolvedValue(true as never);
-      mockJwtService.sign.mockReturnValue("jwt_token");
+      jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
+      mockJwtService.sign.mockReturnValue('jwt_token');
 
       const result = await service.login(loginDto);
 
-      expect(result).toHaveProperty("access_token");
-      expect(result).toHaveProperty("user");
+      expect(result).toHaveProperty('access_token');
+      expect(result).toHaveProperty('user');
     });
 
-    it("should throw UnauthorizedException with incorrect password", async () => {
+    it('should throw UnauthorizedException with incorrect password', async () => {
       mockPrismaService.user.findFirst.mockResolvedValue({
-        password: "hashedPassword",
+        password: 'hashedPassword',
       });
-      jest.spyOn(bcrypt, "compare").mockResolvedValue(false as never);
+      jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
 
       await expect(service.login(loginDto)).rejects.toThrow(
         UnauthorizedException,
       );
     });
 
-    it("should throw UnauthorizedException if user not found", async () => {
+    it('should throw UnauthorizedException if user not found', async () => {
       mockPrismaService.user.findFirst.mockResolvedValue(null);
 
       await expect(service.login(loginDto)).rejects.toThrow(
