@@ -57,11 +57,35 @@ export class AuthService {
             create: {
               name: 'read',
             },
-          }
+          },
         },
       });
     }
     return defaultRole;
+  }
+
+  async addLoginAttempt(data: {
+    userId: string;
+    ipAddress: string;
+    userAgent: string;
+    success: boolean;
+  }) {
+    if (!data.userId) throw new Error('User id is required');
+    if (!data.ipAddress) throw new Error('IP Address is required');
+    
+    const userExists = await this.checkIfUserExists({ id: data.userId });
+    if (!userExists) {
+      throw new Error('User does not exist');
+    }
+
+    return this.prisma.loginHistory.create({
+      data: {
+        userId: data.userId,
+        ipAddress: data.ipAddress,
+        userAgent: data.userAgent,
+        success: data.success,
+      },
+    });
   }
 
   async checkIfUserExists(data: {
@@ -101,20 +125,31 @@ export class AuthService {
   /**
    * Region for Auth methods
    */
-  async login(loginDto: LoginDto) {
-    const user = await this.getUser({ username: loginDto.username });
+  async login(data: {
+    loginDto: LoginDto;
+    ipAddress: string;
+    userAgent: string;
+  }) {
+    const user = await this.getUser({ username: data.loginDto.username });
 
     if (!user || user.deletedAt) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
+      data.loginDto.password,
       user.password,
     );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    this.addLoginAttempt({
+      userId: user.id,
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
+      success: isPasswordValid,
+    });
 
     return this.generateToken(user);
   }
