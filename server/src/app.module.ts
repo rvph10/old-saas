@@ -10,6 +10,7 @@ import { RequestLoggerMiddleware } from './modules/auth/middleware/request-logge
 import { RedisModule } from './redis/redis.module';
 import { PrismaService } from './prisma/prisma.service';
 import { MiddlewareModule } from './modules/middleware/middleware.module';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { MiddlewareModule } from './modules/middleware/middleware.module';
     RedisModule,
     MiddlewareModule
   ],
-  controllers: [],
+  controllers: [HealthController],
   providers: [PrismaService],
 })
 export class AppModule implements NestModule {
