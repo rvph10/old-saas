@@ -1,9 +1,13 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../../prisma/prisma.service';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import * as bcrypt from 'bcrypt';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { PrismaService } from "../../prisma/prisma.service";
+import { LoginDto } from "./dto/login.dto";
+import { RegisterDto } from "./dto/register.dto";
+import * as bcrypt from "bcrypt";
 
 @Injectable()
 export class AuthService {
@@ -16,48 +20,57 @@ export class AuthService {
    * Region for Prisma queries
    */
 
-  async createUser(data: { username: string, email: string, password: string, firstName: string, lastName: string }) {
+  async createUser(data: {
+    username: string;
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+  }) {
     return this.prisma.user.create({
       data: {
         username: data.username,
         email: data.email,
         password: data.password,
         firstName: data.firstName,
-        lastName: data.lastName
-      }
+        lastName: data.lastName,
+      },
     });
   }
 
-  async checkIfUserExists(data: { username?: string, email?: string, id?: string }) {
+  async checkIfUserExists(data: {
+    username?: string;
+    email?: string;
+    id?: string;
+  }) {
     return this.prisma.user.findFirst({
       where: {
         OR: [
           { email: data.email },
           { username: data.username },
-          { id: data.id }
+          { id: data.id },
         ],
-        deletedAt: null
-      }
+        deletedAt: null,
+      },
     });
   }
 
-  async getUser(data: { username?: string, email?: string, id?: string }) {
+  async getUser(data: { username?: string; email?: string; id?: string }) {
     return this.prisma.user.findFirst({
       where: {
         OR: [
           { email: data.email },
           { username: data.username },
-          { id: data.id }
+          { id: data.id },
         ],
-        deletedAt: null
-      }
+        deletedAt: null,
+      },
     });
   }
 
-    /**
+  /**
    * End region
    */
-
 
   /**
    * Region for Auth methods
@@ -66,44 +79,50 @@ export class AuthService {
     const user = await this.getUser({ username: loginDto.username });
 
     if (!user || user.deletedAt) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException("Invalid credentials");
     }
 
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      loginDto.password,
+      user.password,
+    );
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     return this.generateToken(user);
   }
 
   async register(registerDto: RegisterDto) {
-    const existingUser = await this.checkIfUserExists({ email: registerDto.email, username: registerDto.username });
+    const existingUser = await this.checkIfUserExists({
+      email: registerDto.email,
+      username: registerDto.username,
+    });
 
     if (existingUser) {
-      throw new ConflictException('User already exists');
+      throw new ConflictException("User already exists");
     }
 
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-    
-    const user = await this.createUser({ 
-      username: registerDto.username, 
-      email: registerDto.email, 
+
+    const user = await this.createUser({
+      username: registerDto.username,
+      email: registerDto.email,
       password: hashedPassword,
       firstName: registerDto.firstName,
-      lastName: registerDto.lastName
+      lastName: registerDto.lastName,
     });
 
     return this.generateToken(user);
   }
 
   private generateToken(user: any) {
-    const payload = { 
+    const payload = {
       sub: user.id,
       username: user.username,
-      email: user.email
+      email: user.email,
     };
-    
+
     return {
       access_token: this.jwtService.sign(payload),
       user: {
@@ -111,8 +130,8 @@ export class AuthService {
         username: user.username,
         email: user.email,
         firstName: user.firstName,
-        lastName: user.lastName
-      }
+        lastName: user.lastName,
+      },
     };
   }
   /**
