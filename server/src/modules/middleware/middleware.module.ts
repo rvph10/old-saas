@@ -11,12 +11,8 @@ import { RedisModule } from '../../redis/redis.module';
     SessionMiddleware,
     RateLimitMiddleware,
     RequestLoggerMiddleware,
-    SessionService
+    SessionService,
   ],
-  exports: [
-    SessionMiddleware,
-    RateLimitMiddleware,
-    RequestLoggerMiddleware
-  ]
+  exports: [SessionMiddleware, RateLimitMiddleware, RequestLoggerMiddleware],
 })
 export class MiddlewareModule {}

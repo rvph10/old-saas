@@ -7,10 +7,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisModule } from 'src/redis/redis.module';
 import { SessionService } from './session.service';
-import { SessionMiddleware } from './middleware/session.middleware';
-import { RateLimitMiddleware } from './middleware/rate-limit.middleware';
-import { RequestLoggerMiddleware } from './middleware/request-logger.middleware';
-
 
 @Module({
   imports: [
@@ -26,12 +22,7 @@ import { RequestLoggerMiddleware } from './middleware/request-logger.middleware'
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService, 
-    JwtStrategy, 
-    PrismaService, 
-    SessionService
-  ],
+  providers: [AuthService, JwtStrategy, PrismaService, SessionService],
   exports: [AuthService, SessionService],
 })
 export class AuthModule {}

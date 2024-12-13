@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
   UseGuards,
   Headers,
+  Get,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';

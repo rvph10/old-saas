@@ -2,16 +2,19 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { SessionService } from './session.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -30,6 +33,7 @@ export class AuthService {
     lastName: string;
   }) {
     const defaultRole = await this.getDefaultRole();
+    this.logger.debug('Creating user in database');
     return this.prisma.user.create({
       data: {
         username: data.username,
@@ -46,12 +50,14 @@ export class AuthService {
   }
 
   async getDefaultRole() {
-    const defaultRole = this.prisma.role.findFirst({
+    this.logger.debug('Getting default role');
+    const defaultRole = await this.prisma.role.findFirst({
       where: {
         name: 'user',
       },
     });
     if (!defaultRole) {
+      this.logger.debug('Default role not found, creating one');
       return this.prisma.role.create({
         data: {
           name: 'user',
@@ -169,26 +175,43 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
-    const existingUser = await this.checkIfUserExists({
-      email: registerDto.email,
-      username: registerDto.username,
-    });
+    try {
+      this.logger.debug('Starting registration process');
 
-    if (existingUser) {
-      throw new ConflictException('User already exists');
+      const existingUser = await this.checkIfUserExists({
+        email: registerDto.email,
+        username: registerDto.username,
+      });
+
+      if (existingUser) {
+        if (existingUser.email === registerDto.email) {
+          throw new ConflictException('Email already in use');
+        }
+        if (existingUser.username === registerDto.username) {
+          throw new ConflictException('Username already in use');
+        }
+      }
+      const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+      const user = await this.createUser({
+        username: registerDto.username,
+        email: registerDto.email,
+        password: hashedPassword,
+        firstName: registerDto.firstName,
+        lastName: registerDto.lastName,
+      });
+
+      this.logger.debug('User created successfully', user);
+      return this.generateToken(user);
+    } catch (error) {
+      this.logger.error('Registration failed', {
+        error: error.message,
+        stack: error.stack,
+        username: registerDto.username,
+        email: registerDto.email,
+      });
+      throw error;
     }
-
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
-    const user = await this.createUser({
-      username: registerDto.username,
-      email: registerDto.email,
-      password: hashedPassword,
-      firstName: registerDto.firstName,
-      lastName: registerDto.lastName,
-    });
-
-    return this.generateToken(user);
   }
 
   private generateToken(user: any) {
