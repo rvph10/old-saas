@@ -10,9 +10,13 @@ import { PrismaService } from '../../prisma/prisma.service';
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-      secret: 'your-secret-key',
-      signOptions: { expiresIn: '1d' },
-    }),
+      secret: process.env.JWT_SECRET,
+      signOptions: { 
+        expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+        issuer: 'nibblix.com',
+        audience: 'nibblix-clients'
+      },
+    })
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, PrismaService],
