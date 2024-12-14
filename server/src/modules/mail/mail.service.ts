@@ -20,43 +20,69 @@ export class MailerService {
     await this.initializeTransporter();
   }
 
+  private async initializeTestAccount(): Promise<any> {
+    try {
+      const cachedTestAccount = this.configService.get('ETHEREAL_TEST_ACCOUNT');
+      if (cachedTestAccount) {
+        return JSON.parse(cachedTestAccount);
+      }
+  
+      // Create new account without timeout
+      const testAccount = await nodemailer.createTestAccount();
+      
+      if (testAccount) {
+        this.configService.set(
+          'ETHEREAL_TEST_ACCOUNT',
+          JSON.stringify(testAccount)
+        );
+        return testAccount;
+      }
+  
+      throw new Error('Failed to create test account');
+    } catch (error) {
+      this.logger.error('Failed to create test account:', error);
+      // Instead of using invalid fallback credentials, we'll use real SMTP settings
+      return null;
+    }
+  }
+
   private async initializeTransporter() {
     try {
       if (this.configService.get('NODE_ENV') === 'development') {
-        this.logger.debug('Using Ethereal Email for development');
-
-        const cachedTestAccount = this.configService.get(
-          'ETHEREAL_TEST_ACCOUNT',
-        );
-        let testAccount;
-
-        if (cachedTestAccount) {
-          testAccount = JSON.parse(cachedTestAccount);
-        } else {
-          testAccount = await nodemailer.createTestAccount();
-          this.configService.set(
-            'ETHEREAL_TEST_ACCOUNT',
-            JSON.stringify(testAccount),
-          );
-        }
-
-        this.logger.debug('Ethereal Email test account:', {
-          user: testAccount.user,
-          pass: testAccount.pass,
-          web: 'https://ethereal.email',
-        });
-
-        this.transporter = nodemailer.createTransport({
-          host: 'smtp.ethereal.email',
-          port: 587,
-          secure: false,
-          auth: {
+        this.logger.debug('Attempting to use Ethereal Email for development');
+        const testAccount = await this.initializeTestAccount();
+        
+        if (testAccount) {
+          this.logger.debug('Using Ethereal Email test account:', {
             user: testAccount.user,
             pass: testAccount.pass,
-          },
-        });
+            web: 'https://ethereal.email',
+          });
+      
+          this.transporter = nodemailer.createTransport({
+            host: 'smtp.ethereal.email',
+            port: 587,
+            secure: false,
+            auth: {
+              user: testAccount.user,
+              pass: testAccount.pass,
+            },
+          });
+        } else {
+          // Fallback to regular SMTP settings if Ethereal fails
+          this.logger.warn('Falling back to regular SMTP settings');
+          this.transporter = nodemailer.createTransport({
+            host: this.configService.get('SMTP_HOST'),
+            port: this.configService.get('SMTP_PORT'),
+            secure: this.configService.get('SMTP_SECURE') === 'true',
+            auth: {
+              user: this.configService.get('SMTP_USER'),
+              pass: this.configService.get('SMTP_PASS'),
+            },
+          });
+        }
       } else {
-        // For production, use real SMTP settings
+        // Production settings remain the same
         this.transporter = nodemailer.createTransport({
           host: this.configService.get('SMTP_HOST'),
           port: this.configService.get('SMTP_PORT'),
@@ -67,7 +93,7 @@ export class MailerService {
           },
         });
       }
-
+  
       // Verify the connection
       await this.transporter.verify();
       this.logger.log('Mail transporter initialized successfully');
