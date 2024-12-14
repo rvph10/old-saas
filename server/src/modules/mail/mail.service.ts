@@ -22,15 +22,28 @@ export class MailerService {
 
   private async initializeTransporter() {
     try {
-      // For development, use ethereal.email
       if (this.configService.get('NODE_ENV') === 'development') {
         this.logger.debug('Using Ethereal Email for development');
-        const testAccount = await nodemailer.createTestAccount();
-        
+
+        const cachedTestAccount = this.configService.get(
+          'ETHEREAL_TEST_ACCOUNT',
+        );
+        let testAccount;
+
+        if (cachedTestAccount) {
+          testAccount = JSON.parse(cachedTestAccount);
+        } else {
+          testAccount = await nodemailer.createTestAccount();
+          this.configService.set(
+            'ETHEREAL_TEST_ACCOUNT',
+            JSON.stringify(testAccount),
+          );
+        }
+
         this.logger.debug('Ethereal Email test account:', {
           user: testAccount.user,
           pass: testAccount.pass,
-          web: 'https://ethereal.email'
+          web: 'https://ethereal.email',
         });
 
         this.transporter = nodemailer.createTransport({
@@ -91,7 +104,7 @@ export class MailerService {
   // Helper method for password reset emails
   async sendPasswordReset(email: string, token: string): Promise<boolean> {
     const resetLink = `${this.configService.get('FRONTEND_URL')}/reset-password?token=${token}`;
-    
+
     return this.sendMail({
       to: email,
       subject: 'Password Reset Request',

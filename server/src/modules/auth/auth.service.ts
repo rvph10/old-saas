@@ -14,6 +14,7 @@ import { SessionService } from './session.service';
 import { RedisService } from '../../redis/redis.service';
 import { ResetPasswordDto } from './dto/password-reset.dto';
 import { MailerService } from '../mail/mail.service';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +26,7 @@ export class AuthService {
     private sessionService: SessionService,
     private redisService: RedisService,
     private mailerService: MailerService,
+    private performanceService: PerformanceService,
   ) {}
 
   /**
@@ -144,117 +146,171 @@ export class AuthService {
     ipAddress: string;
     userAgent: string;
   }) {
-    const user = await this.getUser({ username: data.loginDto.username });
+    return await this.performanceService.measureAsync('login', async () => {
+      try {
+        this.performanceService.incrementCounter(
+          `login_attempts_${data.ipAddress}`,
+        );
 
-    if (!user || user.deletedAt) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+        const user = await this.getUser({ username: data.loginDto.username });
 
-    const isPasswordValid = await bcrypt.compare(
-      data.loginDto.password,
-      user.password,
-    );
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+        if (!user || user.deletedAt) {
+          // Track failed logins
+          this.performanceService.incrementCounter('failed_logins');
+          throw new UnauthorizedException('Invalid credentials');
+        }
 
-    this.addLoginAttempt({
-      userId: user.id,
-      ipAddress: data.ipAddress,
-      userAgent: data.userAgent,
-      success: isPasswordValid,
+        const isPasswordValid = await bcrypt.compare(
+          data.loginDto.password,
+          user.password,
+        );
+
+        if (!isPasswordValid) {
+          // Track invalid passwords
+          this.performanceService.incrementCounter('invalid_passwords');
+          throw new UnauthorizedException('Invalid credentials');
+        }
+
+        // Track successful logins
+        this.performanceService.incrementCounter('successful_logins');
+
+        // Track active sessions
+        this.performanceService.setGauge(
+          'active_sessions',
+          await this.sessionService
+            .getUserSessions(user.id)
+            .then((sessions) => sessions.length),
+        );
+
+        this.addLoginAttempt({
+          userId: user.id,
+          ipAddress: data.ipAddress,
+          userAgent: data.userAgent,
+          success: isPasswordValid,
+        });
+
+        const sessionId = await this.sessionService.createSession(user.id, {
+          ipAddress: data.ipAddress,
+          userAgent: data.userAgent,
+          lastActivity: new Date().toISOString(),
+        });
+
+        const token = this.generateToken(user);
+        return { ...token, sessionId };
+      } catch (error) {
+        this.logger.error('Login failed', error.stack);
+        throw error;
+      }
     });
-
-    const sessionId = await this.sessionService.createSession(user.id, {
-      ipAddress: data.ipAddress,
-      userAgent: data.userAgent,
-      lastActivity: new Date().toISOString(),
-    });
-
-    const token = this.generateToken(user);
-    return { ...token, sessionId };
   }
 
   async logout(sessionId: string) {
-    await this.sessionService.destroySession(sessionId);
-    return { message: 'Logged out successfully' };
+    return await this.performanceService.measureAsync('logout', async () => {
+      await this.sessionService.destroySession(sessionId);
+      return { message: 'Logged out successfully' };
+    });
   }
 
   async register(registerDto: RegisterDto) {
-    try {
-      this.logger.debug('Starting registration process');
+    return await this.performanceService.measureAsync('register', async () => {
+      try {
+        this.logger.debug('Starting registration process');
 
-      const existingUser = await this.checkIfUserExists({
-        email: registerDto.email,
-        username: registerDto.username,
-      });
+        this.performanceService.incrementCounter('registration_attempts');
 
-      if (existingUser) {
-        if (existingUser.email === registerDto.email) {
-          throw new ConflictException('Email already in use');
+        const existingUser = await this.checkIfUserExists({
+          email: registerDto.email,
+          username: registerDto.username,
+        });
+
+        if (existingUser) {
+          // Track duplicate registration attempts
+          this.performanceService.incrementCounter('duplicate_registrations');
+          // Your existing code...
         }
-        if (existingUser.username === registerDto.username) {
-          throw new ConflictException('Username already in use');
-        }
+
+        // Track successful registrations
+        this.performanceService.incrementCounter('successful_registrations');
+        const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+        const user = await this.createUser({
+          username: registerDto.username,
+          email: registerDto.email,
+          password: hashedPassword,
+          firstName: registerDto.firstName,
+          lastName: registerDto.lastName,
+        });
+
+        await this.mailerService.sendWelcome(user.email, user.username);
+
+        this.logger.debug('User created successfully', user);
+        return this.generateToken(user);
+      } catch (error) {
+        this.logger.error('Registration error', error.stack);
+        throw error;
       }
-      const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
-      const user = await this.createUser({
-        username: registerDto.username,
-        email: registerDto.email,
-        password: hashedPassword,
-        firstName: registerDto.firstName,
-        lastName: registerDto.lastName,
-      });
-
-      await this.mailerService.sendWelcome(user.email, user.username);
-
-      this.logger.debug('User created successfully', user);
-      return this.generateToken(user);
-    } catch (error) {
-      this.logger.error('Registration failed', {
-        error: error.message,
-        stack: error.stack,
-        username: registerDto.username,
-        email: registerDto.email,
-      });
-      throw error;
-    }
+    });
   }
 
   async requestPasswordReset(email: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) {
-        // Return success even if user doesn't exist (security)
-        return { message: 'If the email exists, a reset link has been sent' };
-    }
+    return await this.performanceService.measureAsync(
+      'requestPasswordReset',
+      async () => {
+        try {
+          this.performanceService.incrementCounter('password_reset_requests');
 
-    const token = crypto.randomBytes(32).toString('hex');
-    await this.redisService.set(
-        `pwd_reset:${token}`,
-        user.id,
-        60 * 15,
+          const user = await this.prisma.user.findUnique({ where: { email } });
+          if (!user) {
+            // Track invalid reset requests
+            this.performanceService.incrementCounter('invalid_reset_requests');
+            return {
+              message: 'If the email exists, a reset link has been sent',
+            };
+          }
+
+          // Track successful reset requests
+          this.performanceService.incrementCounter('successful_reset_requests');
+
+          const token = crypto.randomBytes(32).toString('hex');
+          await this.redisService.set(`pwd_reset:${token}`, user.id, 60 * 15);
+
+          await this.mailerService.sendPasswordReset(email, token);
+
+          return { message: 'If the email exists, a reset link has been sent' };
+        } catch (error) {
+          this.logger.error('Request Password Reset error', error.stack);
+          throw error;
+        }
+      },
     );
-
-    await this.mailerService.sendPasswordReset(email, token);
-
-    return { message: 'If the email exists, a reset link has been sent' };
-}
+  }
 
   async resetPassword(resetDto: ResetPasswordDto) {
-    const userId = await this.redisService.get(`pwd_reset:${resetDto.token}`);
-    if (!userId) {
-      throw new UnauthorizedException('Invalid or expired reset token');
-    }
+    return await this.performanceService.measureAsync(
+      'resetPassword',
+      async () => {
+        try {
+          const userId = await this.redisService.get(
+            `pwd_reset:${resetDto.token}`,
+          );
+          if (!userId) {
+            throw new UnauthorizedException('Invalid or expired reset token');
+          }
 
-    const hashedPassword = await bcrypt.hash(resetDto.password, 10);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
-    });
+          const hashedPassword = await bcrypt.hash(resetDto.password, 10);
+          await this.prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword },
+          });
 
-    await this.redisService.del(`pwd_reset:${resetDto.token}`);
-    return { message: 'Password successfully reset' };
+          await this.redisService.del(`pwd_reset:${resetDto.token}`);
+          return { message: 'Password successfully reset' };
+        } catch (error) {
+          this.logger.error('Request Password Reset error', error.stack);
+          throw error;
+        }
+      },
+    );
   }
 
   private generateToken(user: any) {

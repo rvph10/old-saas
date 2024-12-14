@@ -51,7 +51,6 @@ describe('AuthService', () => {
     sendWelcome: jest.fn(),
   };
 
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -93,7 +92,8 @@ describe('AuthService', () => {
       updatedAt: new Date(),
     });
 
-    jest.spyOn(service, 'checkIfUserExists')
+    jest
+      .spyOn(service, 'checkIfUserExists')
       .mockImplementation(async (data) => {
         const result = await mockPrismaService.user.findFirst();
         if (!result) {
@@ -357,7 +357,9 @@ describe('AuthService', () => {
 
       const result = await service.requestPasswordReset(email);
 
-      expect(result.message).toBe('If the email exists, a reset link has been sent');
+      expect(result.message).toBe(
+        'If the email exists, a reset link has been sent',
+      );
       expect(mockRedisService.set).not.toHaveBeenCalled();
       expect(mockMailerService.sendPasswordReset).not.toHaveBeenCalled();
     });

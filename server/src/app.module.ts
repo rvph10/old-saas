@@ -14,6 +14,11 @@ import { HealthController } from './health/health.controller';
 import { MailModule } from './modules/mail/mail.module';
 import { ErrorHandlingService } from './common/errors/error-handling.service';
 import { SecurityHeadersMiddleware } from './common/security/security-headers.middleware';
+import { MonitoringInterceptor } from './common/monitoring/monitor.interceptor';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { MonitoringModule } from './common/monitoring/monitoring.module';
+import { MetricsService } from './common/monitoring/metrics.service';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -32,15 +37,26 @@ import { SecurityHeadersMiddleware } from './common/security/security-headers.mi
     RedisModule,
     MiddlewareModule,
     MailModule,
+    MonitoringModule,
+    AuthModule,
+    HealthModule,
   ],
   controllers: [HealthController],
-  providers: [PrismaService, ErrorHandlingService],
+  providers: [
+    PrismaService,
+    ErrorHandlingService,
+    MetricsService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MonitoringInterceptor,
+    },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-    .apply(SecurityHeadersMiddleware, RequestLoggerMiddleware)
-    .forRoutes('*');
+      .apply(SecurityHeadersMiddleware, RequestLoggerMiddleware)
+      .forRoutes('*');
 
     consumer
       .apply(RateLimitMiddleware)

@@ -21,13 +21,25 @@ import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
 import { SessionService } from './session.service';
 import { SessionGuard } from './guard/session.guard';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
     private sessionService: SessionService,
+    private performanceService: PerformanceService,
   ) {}
+
+  @Get('metrics')
+  @UseGuards(JwtAuthGuard)
+  async getMetrics() {
+    const metrics = this.performanceService.getMetricsSummary();
+    return {
+      metrics,
+      timestamp: new Date().toISOString(),
+    };
+  }
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
@@ -101,7 +113,7 @@ export class AuthController {
     @Req() req: Request & { user: any },
   ) {
     const sessions = await this.sessionService.getUserSessions(req.user.id);
-    
+
     for (const sessionId of sessions) {
       // Skip the current session
       if (sessionId !== currentSessionId) {

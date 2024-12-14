@@ -8,6 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RedisModule } from 'src/redis/redis.module';
 import { SessionService } from './session.service';
 import { MailModule } from '../mail/mail.module';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
 
 @Module({
   imports: [
@@ -24,7 +25,13 @@ import { MailModule } from '../mail/mail.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, PrismaService, SessionService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    PrismaService,
+    SessionService,
+    PerformanceService,
+  ],
   exports: [AuthService, SessionService],
 })
 export class AuthModule {}

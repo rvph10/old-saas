@@ -8,7 +8,7 @@ export class RequestSanitizerMiddleware implements NestMiddleware {
     if (req.body) {
       this.sanitizeObject(req.body);
     }
-    
+
     if (req.query) {
       this.sanitizeObject(req.query);
     }
@@ -21,7 +21,7 @@ export class RequestSanitizerMiddleware implements NestMiddleware {
   }
 
   private sanitizeObject(obj: any) {
-    Object.keys(obj).forEach(key => {
+    Object.keys(obj).forEach((key) => {
       if (typeof obj[key] === 'string') {
         obj[key] = this.sanitizeInput(obj[key]);
       } else if (typeof obj[key] === 'object') {
@@ -34,7 +34,7 @@ export class RequestSanitizerMiddleware implements NestMiddleware {
     return sanitizeHtml(input, {
       allowedTags: [],
       allowedAttributes: {},
-      disallowedTagsMode: 'recursiveEscape'
+      disallowedTagsMode: 'recursiveEscape',
     });
   }
 }

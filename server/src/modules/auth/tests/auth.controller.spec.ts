@@ -168,7 +168,9 @@ describe('AuthController', () => {
         const result = await controller.getSessions({ user: mockUser } as any);
 
         expect(result).toEqual({ sessions: mockSessions });
-        expect(mockSessionService.getUserSessions).toHaveBeenCalledWith(mockUser.id);
+        expect(mockSessionService.getUserSessions).toHaveBeenCalledWith(
+          mockUser.id,
+        );
       });
     });
 
@@ -181,7 +183,9 @@ describe('AuthController', () => {
         } as any);
 
         expect(result).toEqual({ message: 'Session terminated successfully' });
-        expect(mockSessionService.destroySession).toHaveBeenCalledWith('session-id');
+        expect(mockSessionService.destroySession).toHaveBeenCalledWith(
+          'session-id',
+        );
       });
 
       it('should throw UnauthorizedException for non-existent session', async () => {
@@ -209,11 +213,16 @@ describe('AuthController', () => {
         const mockSessions = ['session1', 'session2', 'current-session'];
         mockSessionService.getUserSessions.mockResolvedValue(mockSessions);
 
-        const result = await controller.terminateAllSessions('current-session', {
-          user: mockUser,
-        } as any);
+        const result = await controller.terminateAllSessions(
+          'current-session',
+          {
+            user: mockUser,
+          } as any,
+        );
 
-        expect(result).toEqual({ message: 'All other sessions terminated successfully' });
+        expect(result).toEqual({
+          message: 'All other sessions terminated successfully',
+        });
         expect(mockSessionService.destroySession).toHaveBeenCalledTimes(2);
         expect(mockSessionService.destroySession).not.toHaveBeenCalledWith(
           'current-session',

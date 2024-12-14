@@ -31,26 +31,22 @@ export class ErrorHandlingService {
   handleValidationError(error: Error, context: string): never {
     this.logger.error(`Validation error in ${context}:`, error.stack);
     throw new ValidationError(error.message, {
-      code: ErrorCodes.VALIDATION_ERRORS.INVALID_INPUT
+      code: ErrorCodes.VALIDATION_ERRORS.INVALID_INPUT,
     });
   }
 
   handleAuthError(error: Error, context: string): never {
     this.logger.error(`Authentication error in ${context}:`, error.stack);
     throw new ValidationError(error.message, {
-      code: ErrorCodes.AUTH_ERRORS.INVALID_CREDENTIALS
+      code: ErrorCodes.AUTH_ERRORS.INVALID_CREDENTIALS,
     });
   }
 
   logError(error: Error, context: string): void {
-    this.logger.error(
-      `Error in ${context}:`,
-      error.stack,
-      {
-        name: error.name,
-        message: error.message,
-        timestamp: new Date().toISOString(),
-      }
-    );
+    this.logger.error(`Error in ${context}:`, error.stack, {
+      name: error.name,
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
   }
 }
