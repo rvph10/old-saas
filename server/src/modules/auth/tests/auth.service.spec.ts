@@ -7,6 +7,7 @@ import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../session.service';
 import { RedisService } from '../../../redis/redis.service';
 import { MailerService } from '../../mail/mail.service';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -37,6 +38,18 @@ describe('AuthService', () => {
     createSession: jest.fn(),
     destroySession: jest.fn(),
     getSession: jest.fn(),
+    getUserSessions: jest.fn().mockResolvedValue([])
+  };
+
+  const mockPerformanceService = {
+    measureAsync: jest.fn((name, fn) => fn()),
+    getMetricsSummary: jest.fn().mockReturnValue({
+      timers: {},
+      counters: {},
+      gauges: {}
+    }),
+    incrementCounter: jest.fn(),
+    setGauge: jest.fn(),
   };
 
   const mockRedisService = {
@@ -75,6 +88,10 @@ describe('AuthService', () => {
           provide: MailerService,
           useValue: mockMailerService,
         },
+        {
+          provide: PerformanceService,
+          useValue: mockPerformanceService,
+        }
       ],
     }).compile();
 

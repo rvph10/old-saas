@@ -3,6 +3,7 @@ import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
 import { SessionService } from '../session.service';
 import { UnauthorizedException } from '@nestjs/common';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -23,6 +24,17 @@ describe('AuthController', () => {
     getUserSessions: jest.fn(),
   };
 
+  const mockPerformanceService = {
+    measureAsync: jest.fn((name, fn) => fn()),
+    getMetricsSummary: jest.fn().mockReturnValue({
+      timers: {},
+      counters: {},
+      gauges: {}
+    }),
+    incrementCounter: jest.fn(),
+    setGauge: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
@@ -35,6 +47,10 @@ describe('AuthController', () => {
           provide: SessionService,
           useValue: mockSessionService,
         },
+        {
+          provide: PerformanceService,
+          useValue: mockPerformanceService,
+        }
       ],
     }).compile();
 
