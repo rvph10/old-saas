@@ -207,6 +207,8 @@ export class AuthService {
         lastName: registerDto.lastName,
       });
 
+      await this.mailerService.sendWelcome(user.email, user.username);
+
       this.logger.debug('User created successfully', user);
       return this.generateToken(user);
     } catch (error) {

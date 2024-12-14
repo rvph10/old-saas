@@ -14,46 +14,69 @@ export class MailerService {
   private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailerService.name);
 
-  constructor(private configService: ConfigService) {
-    this.initializeTransporter();
+  constructor(private configService: ConfigService) {}
+
+  async onModuleInit() {
+    await this.initializeTransporter();
   }
 
   private async initializeTransporter() {
-    // For development, use ethereal.email
-    if (this.configService.get('NODE_ENV') === 'development') {
-      const testAccount = await nodemailer.createTestAccount();
-      this.transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
+    try {
+      // For development, use ethereal.email
+      if (this.configService.get('NODE_ENV') === 'development') {
+        const testAccount = await nodemailer.createTestAccount();
+        
+        this.logger.debug('Ethereal Email test account:', {
           user: testAccount.user,
           pass: testAccount.pass,
-        },
-      });
-    } else {
-      // For production, use real SMTP settings
-      this.transporter = nodemailer.createTransport({
-        host: this.configService.get('SMTP_HOST'),
-        port: this.configService.get('SMTP_PORT'),
-        secure: this.configService.get('SMTP_SECURE') === 'true',
-        auth: {
-          user: this.configService.get('SMTP_USER'),
-          pass: this.configService.get('SMTP_PASS'),
-        },
-      });
+          web: 'https://ethereal.email'
+        });
+
+        this.transporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        });
+      } else {
+        // For production, use real SMTP settings
+        this.transporter = nodemailer.createTransport({
+          host: this.configService.get('SMTP_HOST'),
+          port: this.configService.get('SMTP_PORT'),
+          secure: this.configService.get('SMTP_SECURE') === 'true',
+          auth: {
+            user: this.configService.get('SMTP_USER'),
+            pass: this.configService.get('SMTP_PASS'),
+          },
+        });
+      }
+
+      // Verify the connection
+      await this.transporter.verify();
+      this.logger.log('Mail transporter initialized successfully');
+    } catch (error) {
+      this.logger.error('Failed to initialize mail transporter:', error);
+      throw error;
     }
   }
 
   async sendMail(options: MailOptions): Promise<boolean> {
     try {
+      if (!this.transporter) {
+        await this.initializeTransporter();
+      }
+
       const info = await this.transporter.sendMail({
         from: this.configService.get('SMTP_FROM') || 'noreply@nibblix.com',
         ...options,
       });
 
       if (this.configService.get('NODE_ENV') === 'development') {
-        this.logger.debug(`Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        this.logger.debug(`Email Preview URL: ${previewUrl}`);
       }
 
       this.logger.log(`Email sent: ${info.messageId}`);
