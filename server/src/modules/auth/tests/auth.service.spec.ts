@@ -3,7 +3,7 @@ import { AuthService } from '../auth.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../session.service';
 
 describe('AuthService', () => {
@@ -114,7 +114,13 @@ describe('AuthService', () => {
     });
 
     it('should throw ConflictException if user already exists', async () => {
-      mockPrismaService.user.findFirst.mockResolvedValue({ id: '1' });
+      const existingUser = {
+        id: '1',
+        email: registerDto.email,
+        username: registerDto.username,
+      };
+
+      mockPrismaService.user.findFirst.mockResolvedValue(existingUser);
 
       await expect(service.register(registerDto)).rejects.toThrow(
         ConflictException,
