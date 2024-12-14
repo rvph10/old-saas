@@ -12,6 +12,8 @@ import { PrismaService } from './prisma/prisma.service';
 import { MiddlewareModule } from './modules/middleware/middleware.module';
 import { HealthController } from './health/health.controller';
 import { MailModule } from './modules/mail/mail.module';
+import { ErrorHandlingService } from './common/errors/error-handling.service';
+import { SecurityHeadersMiddleware } from './common/security/security-headers.middleware';
 
 @Module({
   imports: [
@@ -32,11 +34,13 @@ import { MailModule } from './modules/mail/mail.module';
     MailModule,
   ],
   controllers: [HealthController],
-  providers: [PrismaService],
+  providers: [PrismaService, ErrorHandlingService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+    consumer
+    .apply(SecurityHeadersMiddleware, RequestLoggerMiddleware)
+    .forRoutes('*');
 
     consumer
       .apply(RateLimitMiddleware)

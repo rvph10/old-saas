@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -14,14 +14,19 @@ async function bootstrap() {
     credentials: true,
   });
 
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
+      forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+      disableErrorMessages: process.env.NODE_ENV === 'production',
     }),
   );
-
-  app.useGlobalFilters(new HttpExceptionFilter());
 
   const port = process.env.PORT || 5000;
   const host = process.env.HOST || '0.0.0.0';

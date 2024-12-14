@@ -24,6 +24,7 @@ export class MailerService {
     try {
       // For development, use ethereal.email
       if (this.configService.get('NODE_ENV') === 'development') {
+        this.logger.debug('Using Ethereal Email for development');
         const testAccount = await nodemailer.createTestAccount();
         
         this.logger.debug('Ethereal Email test account:', {
