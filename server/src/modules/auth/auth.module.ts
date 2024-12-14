@@ -7,10 +7,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisModule } from 'src/redis/redis.module';
 import { SessionService } from './session.service';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     RedisModule,
+    MailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: process.env.JWT_SECRET,

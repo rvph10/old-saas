@@ -5,6 +5,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../session.service';
+import { RedisService } from '../../../redis/redis.service';
+import { MailerService } from '../../mail/mail.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -15,6 +17,8 @@ describe('AuthService', () => {
     user: {
       findFirst: jest.fn(),
       create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
     role: {
       findFirst: jest.fn(),
@@ -32,7 +36,21 @@ describe('AuthService', () => {
   const mockSessionService = {
     createSession: jest.fn(),
     destroySession: jest.fn(),
+    getSession: jest.fn(),
   };
+
+  const mockRedisService = {
+    set: jest.fn(),
+    get: jest.fn(),
+    del: jest.fn(),
+  };
+
+  const mockMailerService = {
+    sendMail: jest.fn(),
+    sendPasswordReset: jest.fn(),
+    sendWelcome: jest.fn(),
+  };
+
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -50,12 +68,22 @@ describe('AuthService', () => {
           provide: SessionService,
           useValue: mockSessionService,
         },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
+        {
+          provide: MailerService,
+          useValue: mockMailerService,
+        },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
     prismaService = module.get<PrismaService>(PrismaService);
     jwtService = module.get<JwtService>(JwtService);
+
+    jest.clearAllMocks();
 
     jest.spyOn(service, 'getDefaultRole').mockResolvedValue({
       id: 'default-role-id',
@@ -65,8 +93,7 @@ describe('AuthService', () => {
       updatedAt: new Date(),
     });
 
-    jest
-      .spyOn(service, 'checkIfUserExists')
+    jest.spyOn(service, 'checkIfUserExists')
       .mockImplementation(async (data) => {
         const result = await mockPrismaService.user.findFirst();
         if (!result) {
@@ -298,6 +325,62 @@ describe('AuthService', () => {
       await service.logout(sessionId);
 
       expect(mockSessionService.destroySession).toHaveBeenCalledWith(sessionId);
+    });
+  });
+
+  describe('password reset', () => {
+    const email = 'test@example.com';
+    const token = 'reset-token';
+    const userId = 'user-id';
+
+    it('should handle password reset request successfully', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue({
+        id: userId,
+        email,
+      });
+
+      await service.requestPasswordReset(email);
+
+      expect(mockRedisService.set).toHaveBeenCalledWith(
+        expect.stringContaining('pwd_reset:'),
+        userId,
+        15 * 60, // 15 minutes
+      );
+      expect(mockMailerService.sendPasswordReset).toHaveBeenCalledWith(
+        email,
+        expect.any(String),
+      );
+    });
+
+    it('should handle non-existent email for password reset', async () => {
+      mockPrismaService.user.findUnique.mockResolvedValue(null);
+
+      const result = await service.requestPasswordReset(email);
+
+      expect(result.message).toBe('If the email exists, a reset link has been sent');
+      expect(mockRedisService.set).not.toHaveBeenCalled();
+      expect(mockMailerService.sendPasswordReset).not.toHaveBeenCalled();
+    });
+
+    it('should reset password successfully', async () => {
+      const newPassword = 'newPassword123!';
+      mockRedisService.get.mockResolvedValue(userId);
+
+      await service.resetPassword({ token, password: newPassword });
+
+      expect(mockPrismaService.user.update).toHaveBeenCalledWith({
+        where: { id: userId },
+        data: { password: expect.any(String) },
+      });
+      expect(mockRedisService.del).toHaveBeenCalledWith(`pwd_reset:${token}`);
+    });
+
+    it('should throw UnauthorizedException for invalid reset token', async () => {
+      mockRedisService.get.mockResolvedValue(null);
+
+      await expect(
+        service.resetPassword({ token, password: 'newPassword123!' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

@@ -11,6 +11,7 @@ import { RedisModule } from './redis/redis.module';
 import { PrismaService } from './prisma/prisma.service';
 import { MiddlewareModule } from './modules/middleware/middleware.module';
 import { HealthController } from './health/health.controller';
+import { MailModule } from './modules/mail/mail.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { HealthController } from './health/health.controller';
     AuthModule,
     RedisModule,
     MiddlewareModule,
+    MailModule,
   ],
   controllers: [HealthController],
   providers: [PrismaService],

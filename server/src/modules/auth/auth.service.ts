@@ -5,11 +5,15 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from './session.service';
+import { RedisService } from '../../redis/redis.service';
+import { ResetPasswordDto } from './dto/password-reset.dto';
+import { MailerService } from '../mail/mail.service';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +23,8 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private sessionService: SessionService,
+    private redisService: RedisService,
+    private mailerService: MailerService,
   ) {}
 
   /**
@@ -212,6 +218,41 @@ export class AuthService {
       });
       throw error;
     }
+  }
+
+  async requestPasswordReset(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+        // Return success even if user doesn't exist (security)
+        return { message: 'If the email exists, a reset link has been sent' };
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    await this.redisService.set(
+        `pwd_reset:${token}`,
+        user.id,
+        60 * 15,
+    );
+
+    await this.mailerService.sendPasswordReset(email, token);
+
+    return { message: 'If the email exists, a reset link has been sent' };
+}
+
+  async resetPassword(resetDto: ResetPasswordDto) {
+    const userId = await this.redisService.get(`pwd_reset:${resetDto.token}`);
+    if (!userId) {
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+
+    const hashedPassword = await bcrypt.hash(resetDto.password, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    await this.redisService.del(`pwd_reset:${resetDto.token}`);
+    return { message: 'Password successfully reset' };
   }
 
   private generateToken(user: any) {
