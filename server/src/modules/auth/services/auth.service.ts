@@ -161,14 +161,19 @@ export class AuthService {
           email: data.loginDto.username,
         });
 
-        if (!user || user.deletedAt) {
+        if (!user) {
           this.performanceService.incrementCounter('failed_logins');
-          throw new UnauthorizedException('Invalid credentials');
+          throw new UnauthorizedException('Account not found with these credentials');
+        }
+
+        if (user.deletedAt) {
+          this.performanceService.incrementCounter('failed_logins');
+          throw new UnauthorizedException('This account has been deactivated. Please contact support for assistance');
         }
 
         if (!user.isEmailVerified) {
           throw new UnauthorizedException(
-            'Please verify your email before logging in',
+            'Email verification required. Please check your email for verification instructions',
           );
         }
 
@@ -180,7 +185,7 @@ export class AuthService {
               new Date(),
             );
             throw new UnauthorizedException(
-              `Account locked. Try again in ${remainingMinutes} minutes`,
+              `Account temporarily locked for security. Please try again in ${remainingMinutes} minutes`
             );
           } else {
             await this.resetFailedAttempts(user.id);
@@ -194,7 +199,7 @@ export class AuthService {
 
         if (!isPasswordValid) {
           await this.handleFailedLogin(user);
-          throw new UnauthorizedException('Invalid credentials');
+          throw new UnauthorizedException('Invalid credentials, please try again');
         }
 
         // Reset failed attempts on successful login
@@ -246,7 +251,7 @@ export class AuthService {
     for (const historical of recentPasswords) {
       if (await bcrypt.compare(newPassword, historical.password)) {
         throw new BadRequestException(
-          'Cannot reuse one of your last 5 passwords',
+          'Password must be different from recent passwords, please choose a new one',
         );
       }
     }
@@ -383,7 +388,7 @@ export class AuthService {
             throw new ConflictException('Email already in use');
           }
           if (existingUser.username === registerDto.username) {
-            throw new ConflictException('Username already in use');
+            throw new ConflictException('Username already in use, please choose another');
           }
         }
         this.performanceService.incrementCounter('successful_registrations');

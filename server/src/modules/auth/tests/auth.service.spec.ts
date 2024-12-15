@@ -299,7 +299,7 @@ describe('AuthService', () => {
         ipAddress: '127.0.0.1',
         userAgent: 'test-agent',
       };
-
+'Password must be different from recent passwords, please choose a new one'
       it('should increment failed login attempts', async () => {
         const user = {
           id: '1',
@@ -313,7 +313,7 @@ describe('AuthService', () => {
         jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
 
         await expect(service.login(loginData)).rejects.toThrow(
-          'Invalid credentials',
+          'Invalid credentials, please try again',
         );
 
         expect(mockPrismaService.user.update).toHaveBeenCalledWith({
@@ -338,7 +338,7 @@ describe('AuthService', () => {
         jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
 
         await expect(service.login(loginData)).rejects.toThrow(
-          'Account locked for 15 minutes due to too many failed attempts',
+          'Account temporarily locked for security. Please try again in 15 minutes',
         );
       });
 
@@ -667,7 +667,7 @@ describe('AuthService', () => {
       ]);
   
       await expect(service.checkPasswordHistory(userId, newPassword))
-        .rejects.toThrow('Cannot reuse one of your last 5 passwords');
+        .rejects.toThrow('Password must be different from recent passwords, please choose a new one');
     });
   
     it('should save password to history', async () => {
