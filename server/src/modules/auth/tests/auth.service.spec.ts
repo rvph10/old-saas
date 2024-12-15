@@ -338,7 +338,7 @@ describe('AuthService', () => {
         jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
 
         await expect(service.login(loginData)).rejects.toThrow(
-          'Account temporarily locked for security. Please try again in 15 minutes',
+          'Account locked for 15 minutes due to too many failed attempts',
         );
       });
 
@@ -357,7 +357,7 @@ describe('AuthService', () => {
         mockPrismaService.user.findFirst.mockResolvedValue(user);
 
         await expect(service.login(loginData)).rejects.toThrow(
-          /Account locked. Try again in \d+ minutes/
+          /Account temporarily locked for security. Please try again in \d+ minutes/
         );
       });
 
