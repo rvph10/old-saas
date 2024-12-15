@@ -29,7 +29,7 @@ describe('AuthController', () => {
     getMetricsSummary: jest.fn().mockReturnValue({
       timers: {},
       counters: {},
-      gauges: {}
+      gauges: {},
     }),
     incrementCounter: jest.fn(),
     setGauge: jest.fn(),
@@ -50,7 +50,7 @@ describe('AuthController', () => {
         {
           provide: PerformanceService,
           useValue: mockPerformanceService,
-        }
+        },
       ],
     }).compile();
 

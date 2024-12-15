@@ -53,11 +53,13 @@ describe('MailerService', () => {
   describe('initialization', () => {
     it('should initialize ethereal transport in development', async () => {
       mockConfigService.get.mockReturnValue('development');
-      const mockEtherealAccount = { 
-        user: 'test@ethereal.email', 
-        pass: 'testpass' 
+      const mockEtherealAccount = {
+        user: 'test@ethereal.email',
+        pass: 'testpass',
       };
-      (nodemailer.createTestAccount as jest.Mock).mockResolvedValue(mockEtherealAccount);
+      (nodemailer.createTestAccount as jest.Mock).mockResolvedValue(
+        mockEtherealAccount,
+      );
 
       await service.onModuleInit();
 
@@ -75,12 +77,12 @@ describe('MailerService', () => {
     it('should initialize production transport in production', async () => {
       mockConfigService.get.mockImplementation((key) => {
         const config = {
-          'NODE_ENV': 'production',
-          'SMTP_HOST': 'smtp.example.com',
-          'SMTP_PORT': 587,
-          'SMTP_SECURE': 'false',
-          'SMTP_USER': 'user',
-          'SMTP_PASS': 'pass',
+          NODE_ENV: 'production',
+          SMTP_HOST: 'smtp.example.com',
+          SMTP_PORT: 587,
+          SMTP_SECURE: 'false',
+          SMTP_USER: 'user',
+          SMTP_PASS: 'pass',
         };
         return config[key];
       });
@@ -103,8 +105,8 @@ describe('MailerService', () => {
     beforeEach(async () => {
       mockConfigService.get.mockImplementation((key) => {
         const config = {
-          'NODE_ENV': 'production',
-          'SMTP_FROM': 'noreply@nibblix.com'
+          NODE_ENV: 'production',
+          SMTP_FROM: 'noreply@nibblix.com',
         };
         return config[key];
       });
@@ -150,9 +152,9 @@ describe('MailerService', () => {
     beforeEach(async () => {
       mockConfigService.get.mockImplementation((key) => {
         const config = {
-          'NODE_ENV': 'production',
-          'FRONTEND_URL': 'http://localhost:3000',
-          'SMTP_FROM': 'noreply@nibblix.com'
+          NODE_ENV: 'production',
+          FRONTEND_URL: 'http://localhost:3000',
+          SMTP_FROM: 'noreply@nibblix.com',
         };
         return config[key];
       });
@@ -180,9 +182,9 @@ describe('MailerService', () => {
     beforeEach(async () => {
       mockConfigService.get.mockImplementation((key) => {
         const config = {
-          'NODE_ENV': 'production',
-          'FRONTEND_URL': 'http://localhost:3000',
-          'SMTP_FROM': 'noreply@nibblix.com'
+          NODE_ENV: 'production',
+          FRONTEND_URL: 'http://localhost:3000',
+          SMTP_FROM: 'noreply@nibblix.com',
         };
         return config[key];
       });
@@ -193,15 +195,15 @@ describe('MailerService', () => {
       const email = 'test@example.com';
       const token = 'reset-token';
       mockTransporter.sendMail.mockResolvedValue({ messageId: 'test-id' });
-  
+
       const result = await service.sendPasswordReset(email, token);
-  
+
       expect(result).toBe(true);
       expect(mockTransporter.sendMail).toHaveBeenCalledWith({
         from: 'noreply@nibblix.com',
         to: email,
         subject: 'Password Reset Request',
-        html: expect.stringContaining('reset-token')
+        html: expect.stringContaining('reset-token'),
       });
     });
   });
@@ -210,8 +212,8 @@ describe('MailerService', () => {
     beforeEach(async () => {
       mockConfigService.get.mockImplementation((key) => {
         const config = {
-          'NODE_ENV': 'production',
-          'SMTP_FROM': 'noreply@nibblix.com'
+          NODE_ENV: 'production',
+          SMTP_FROM: 'noreply@nibblix.com',
         };
         return config[key];
       });
@@ -222,15 +224,15 @@ describe('MailerService', () => {
       const email = 'test@example.com';
       const username = 'testuser';
       mockTransporter.sendMail.mockResolvedValue({ messageId: 'test-id' });
-  
+
       const result = await service.sendWelcome(email, username);
-  
+
       expect(result).toBe(true);
       expect(mockTransporter.sendMail).toHaveBeenCalledWith({
         from: 'noreply@nibblix.com',
         to: email,
         subject: 'Welcome to Nibblix',
-        html: expect.stringContaining(username)
+        html: expect.stringContaining(username),
       });
     });
   });
@@ -243,7 +245,7 @@ describe('MailerService', () => {
     it('should use cached ethereal account if available and valid', async () => {
       const cachedAccount = {
         user: 'cached@ethereal.email',
-        pass: 'cachedpass'
+        pass: 'cachedpass',
       };
       mockRedisService.get.mockResolvedValue(JSON.stringify(cachedAccount));
       mockTransporter.verify.mockResolvedValue(true);
@@ -253,21 +255,21 @@ describe('MailerService', () => {
       expect(nodemailer.createTestAccount).not.toHaveBeenCalled();
       expect(nodemailer.createTransport).toHaveBeenCalledWith(
         expect.objectContaining({
-          auth: cachedAccount
-        })
+          auth: cachedAccount,
+        }),
       );
     });
 
     it('should create new ethereal account if cache is invalid', async () => {
       const cachedAccount = {
         user: 'invalid@ethereal.email',
-        pass: 'invalidpass'
+        pass: 'invalidpass',
       };
       const newAccount = {
         user: 'new@ethereal.email',
-        pass: 'newpass'
+        pass: 'newpass',
       };
-      
+
       mockRedisService.get.mockResolvedValue(JSON.stringify(cachedAccount));
       // First verify fails (cached credentials), second verify succeeds (new credentials)
       mockTransporter.verify
@@ -282,7 +284,7 @@ describe('MailerService', () => {
       expect(mockRedisService.set).toHaveBeenCalledWith(
         'ethereal_account',
         JSON.stringify(newAccount),
-        60 * 60 * 24 * 7
+        60 * 60 * 24 * 7,
       );
     });
   });

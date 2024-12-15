@@ -2,7 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../auth.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { ConflictException, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../session.service';
 import { RedisService } from '../../../redis/redis.service';
@@ -10,7 +14,6 @@ import { MailerService } from '../../mail/mail.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { addMinutes, subMinutes } from 'date-fns';
 import { isEmail } from 'class-validator';
-
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -41,7 +44,7 @@ describe('AuthService', () => {
     createSession: jest.fn(),
     destroySession: jest.fn(),
     getSession: jest.fn(),
-    getUserSessions: jest.fn().mockResolvedValue([])
+    getUserSessions: jest.fn().mockResolvedValue([]),
   };
 
   const mockPerformanceService = {
@@ -49,7 +52,7 @@ describe('AuthService', () => {
     getMetricsSummary: jest.fn().mockReturnValue({
       timers: {},
       counters: {},
-      gauges: {}
+      gauges: {},
     }),
     incrementCounter: jest.fn(),
     setGauge: jest.fn(),
@@ -106,7 +109,7 @@ describe('AuthService', () => {
         {
           provide: Logger,
           useValue: mockLogger,
-        }
+        },
       ],
     }).compile();
 
@@ -116,10 +119,12 @@ describe('AuthService', () => {
 
     jest.clearAllMocks();
 
-    mockPrismaService.user.update = jest.fn().mockImplementation(({ data }) => ({
-      ...data,
-      id: '1',
-    }));
+    mockPrismaService.user.update = jest
+      .fn()
+      .mockImplementation(({ data }) => ({
+        ...data,
+        id: '1',
+      }));
 
     jest.spyOn(service, 'getDefaultRole').mockResolvedValue({
       id: 'default-role-id',
@@ -286,7 +291,7 @@ describe('AuthService', () => {
         ipAddress: '127.0.0.1',
         userAgent: 'test-agent',
       };
-  
+
       it('should increment failed login attempts', async () => {
         const user = {
           id: '1',
@@ -295,21 +300,23 @@ describe('AuthService', () => {
           failedLoginAttempts: 0,
           isEmailVerified: true,
         };
-  
+
         mockPrismaService.user.findFirst.mockResolvedValue(user);
         jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
 
-        await expect(service.login(loginData)).rejects.toThrow('Invalid credentials');
+        await expect(service.login(loginData)).rejects.toThrow(
+          'Invalid credentials',
+        );
 
         expect(mockPrismaService.user.update).toHaveBeenCalledWith({
           where: { id: '1' },
           data: expect.objectContaining({
             failedLoginAttempts: 1,
-            lastFailedLoginAttempt: expect.any(Date)
-          })
+            lastFailedLoginAttempt: expect.any(Date),
+          }),
         });
       });
-  
+
       it('should lock account after 8 failed attempts', async () => {
         const user = {
           id: '1',
@@ -318,15 +325,15 @@ describe('AuthService', () => {
           failedLoginAttempts: 7,
           isEmailVerified: true,
         };
-  
+
         mockPrismaService.user.findFirst.mockResolvedValue(user);
         jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
-  
+
         await expect(service.login(loginData)).rejects.toThrow(
-          'Account locked for 15 minutes due to too many failed attempts'
+          'Account locked for 15 minutes due to too many failed attempts',
         );
       });
-  
+
       it('should prevent login when account is locked', async () => {
         const lockExpires = addMinutes(new Date(), 10);
         const user = {
@@ -338,14 +345,14 @@ describe('AuthService', () => {
           lockExpires,
           isEmailVerified: true,
         };
-    
+
         mockPrismaService.user.findFirst.mockResolvedValue(user);
-    
+
         await expect(service.login(loginData)).rejects.toThrow(
-          `Account locked. Try again in 10 minutes`
+          `Account locked. Try again in 10 minutes`,
         );
       });
-  
+
       it('should reset failed attempts on successful login', async () => {
         const user = {
           id: '1',
@@ -354,16 +361,16 @@ describe('AuthService', () => {
           failedLoginAttempts: 2,
           isEmailVerified: true,
         };
-  
+
         mockPrismaService.user.findFirst.mockResolvedValue(user);
         jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
         mockJwtService.sign.mockReturnValue('jwt_token');
-  
+
         await service.login({
           ...loginData,
           loginDto: { ...loginData.loginDto, password: 'correctpassword' },
         });
-  
+
         expect(mockPrismaService.user.update).toHaveBeenCalledWith({
           where: { id: user.id },
           data: expect.objectContaining({
@@ -373,7 +380,7 @@ describe('AuthService', () => {
           }),
         });
       });
-  
+
       it('should automatically unlock account after lock expires', async () => {
         const lockExpires = subMinutes(new Date(), 1); // Lock expired 1 minute ago
         const user = {
@@ -385,16 +392,16 @@ describe('AuthService', () => {
           lockExpires,
           isEmailVerified: true,
         };
-  
+
         mockPrismaService.user.findFirst.mockResolvedValue(user);
         jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
         mockJwtService.sign.mockReturnValue('jwt_token');
-  
+
         await service.login({
           ...loginData,
           loginDto: { ...loginData.loginDto, password: 'correctpassword' },
         });
-  
+
         expect(mockPrismaService.user.update).toHaveBeenCalledWith({
           where: { id: user.id },
           data: expect.objectContaining({
@@ -592,7 +599,7 @@ describe('AuthService', () => {
   describe('Email Verification', () => {
     const verificationToken = 'test-token';
     const email = 'test@example.com';
-  
+
     describe('verifyEmail', () => {
       it('should verify email successfully', async () => {
         const user = {
@@ -602,26 +609,27 @@ describe('AuthService', () => {
           verificationToken,
           verificationExpiry: addMinutes(new Date(), 15),
         };
-  
+
         mockPrismaService.user.findUnique.mockResolvedValue(user);
         mockPrismaService.user.update.mockResolvedValue({
           ...user,
           isEmailVerified: true,
         });
-  
+
         const result = await service.verifyEmail(verificationToken);
         expect(result.message).toBe('Email verified successfully');
       });
-  
+
       it('should throw error for invalid token', async () => {
         mockPrismaService.user.findUnique.mockResolvedValue(null);
-  
-        await expect(service.verifyEmail('invalid-token'))
-          .rejects.toThrow(UnauthorizedException);
+
+        await expect(service.verifyEmail('invalid-token')).rejects.toThrow(
+          UnauthorizedException,
+        );
       });
-  
+
       it('should throw error for expired token', async () => {
-        const pastDate = new Date();  
+        const pastDate = new Date();
         pastDate.setMinutes(pastDate.getMinutes() - 30);
 
         const user = {
@@ -631,11 +639,12 @@ describe('AuthService', () => {
           verificationToken,
           verificationExpiry: pastDate,
         };
-  
+
         mockPrismaService.user.findUnique.mockResolvedValue(user);
-  
-        await expect(service.verifyEmail(verificationToken))
-          .rejects.toThrow(UnauthorizedException);
+
+        await expect(service.verifyEmail(verificationToken)).rejects.toThrow(
+          UnauthorizedException,
+        );
       });
     });
   });

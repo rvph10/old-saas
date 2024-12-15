@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { RedisService } from 'src/redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -57,8 +62,10 @@ export class SessionService {
 
   async destroySession(sessionId: string): Promise<void> {
     await this.trackSessionActivity(sessionId, 'session_destroyed');
-  await this.redisService.del(`${this.SESSION_PREFIX}${sessionId}`);
-  await this.redisService.del(`${this.SESSION_PREFIX}${sessionId}:activities`);
+    await this.redisService.del(`${this.SESSION_PREFIX}${sessionId}`);
+    await this.redisService.del(
+      `${this.SESSION_PREFIX}${sessionId}:activities`,
+    );
   }
 
   async validateSession(sessionId: string, userId: string): Promise<boolean> {
@@ -83,60 +90,70 @@ export class SessionService {
     return userSessions;
   }
 
-  async revokeAllUserSessions(userId: string, exceptSessionId?: string): Promise<void> {
+  async revokeAllUserSessions(
+    userId: string,
+    exceptSessionId?: string,
+  ): Promise<void> {
     const sessions = await this.getUserSessions(userId);
-    
+
     for (const sessionId of sessions) {
       if (sessionId !== exceptSessionId) {
         await this.destroySession(sessionId);
       }
     }
   }
-  
+
   async extendSession(sessionId: string, duration?: number): Promise<void> {
     const maxDuration = 7 * 24 * 60 * 60; // 7 days
     const minDuration = 60 * 15; // 15 minutes
-    
+
     // Validate duration
     if (duration) {
       if (duration > maxDuration) {
-        throw new BadRequestException(`Session duration cannot exceed ${maxDuration} seconds`);
+        throw new BadRequestException(
+          `Session duration cannot exceed ${maxDuration} seconds`,
+        );
       }
       if (duration < minDuration) {
-        throw new BadRequestException(`Session duration must be at least ${minDuration} seconds`);
+        throw new BadRequestException(
+          `Session duration must be at least ${minDuration} seconds`,
+        );
       }
     }
-  
+
     const session = await this.getSession(sessionId);
     if (!session) {
       throw new NotFoundException('Session not found');
     }
-  
+
     const finalDuration = duration || this.SESSION_TTL;
-    
+
     await this.redisService.set(
       `${this.SESSION_PREFIX}${sessionId}`,
-      JSON.stringify({...session, lastActivity: new Date().toISOString()}),
-      finalDuration
+      JSON.stringify({ ...session, lastActivity: new Date().toISOString() }),
+      finalDuration,
     );
 
     await this.trackSessionActivity(sessionId, 'Session extended');
   }
 
-  private async trackSessionActivity(sessionId: string, activity: string): Promise<void> {
+  private async trackSessionActivity(
+    sessionId: string,
+    activity: string,
+  ): Promise<void> {
     const session = await this.getSession(sessionId);
     if (session) {
       const activityLog = {
         timestamp: new Date().toISOString(),
         activity,
         sessionId,
-        userId: session.userId
+        userId: session.userId,
       };
-      
+
       await this.redisService.set(
         `${this.SESSION_PREFIX}${sessionId}:activities`,
         JSON.stringify(activityLog),
-        this.SESSION_TTL
+        this.SESSION_TTL,
       );
     }
   }

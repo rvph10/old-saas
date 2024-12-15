@@ -30,7 +30,7 @@ export class AuthService {
     private sessionService: SessionService,
     private redisService: RedisService,
     private mailerService: MailerService,
-    private performanceService: PerformanceService
+    private performanceService: PerformanceService,
   ) {}
 
   /**
@@ -161,48 +161,56 @@ export class AuthService {
           username: data.loginDto.username,
           email: data.loginDto.username,
         });
-  
+
         if (!user || user.deletedAt) {
           this.performanceService.incrementCounter('failed_logins');
           throw new UnauthorizedException('Invalid credentials');
         }
-  
+
         if (!user.isEmailVerified) {
-          throw new UnauthorizedException('Please verify your email before logging in');
+          throw new UnauthorizedException(
+            'Please verify your email before logging in',
+          );
         }
-  
+
         // Check if account is locked
         if (user.accountLocked && user.lockExpires) {
           if (user.lockExpires > new Date()) {
-            const remainingMinutes = differenceInMinutes(user.lockExpires, new Date());
+            const remainingMinutes = differenceInMinutes(
+              user.lockExpires,
+              new Date(),
+            );
             throw new UnauthorizedException(
-              `Account locked. Try again in ${remainingMinutes} minutes`
+              `Account locked. Try again in ${remainingMinutes} minutes`,
             );
           } else {
             await this.resetFailedAttempts(user.id);
           }
         }
-  
+
         const isPasswordValid = await bcrypt.compare(
           data.loginDto.password,
-          user.password
+          user.password,
         );
-  
+
         if (!isPasswordValid) {
           await this.handleFailedLogin(user);
           throw new UnauthorizedException('Invalid credentials');
         }
-  
+
         // Reset failed attempts on successful login
         await this.resetFailedAttempts(user.id);
-  
+
         // Track successful logins
         this.performanceService.incrementCounter('successful_logins');
-      
-      // Track active sessions
-      this.performanceService.setGauge('active_sessions', 
-        await this.sessionService.getUserSessions(user.id).then(sessions => sessions.length)
-      );
+
+        // Track active sessions
+        this.performanceService.setGauge(
+          'active_sessions',
+          await this.sessionService
+            .getUserSessions(user.id)
+            .then((sessions) => sessions.length),
+        );
 
         this.addLoginAttempt({
           userId: user.id,
@@ -226,102 +234,123 @@ export class AuthService {
     });
   }
 
-  private async checkPasswordHistory(userId: string, newPassword: string): Promise<boolean> {
+  private async checkPasswordHistory(
+    userId: string,
+    newPassword: string,
+  ): Promise<boolean> {
     const recentPasswords = await this.prisma.passwordHistory.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 5,
     });
-  
+
     for (const historical of recentPasswords) {
       if (await bcrypt.compare(newPassword, historical.password)) {
-        throw new BadRequestException('Cannot reuse one of your last 5 passwords');
+        throw new BadRequestException(
+          'Cannot reuse one of your last 5 passwords',
+        );
       }
     }
-  
+
     return true;
   }
-  
-  private async savePasswordToHistory(userId: string, hashedPassword: string): Promise<void> {
+
+  private async savePasswordToHistory(
+    userId: string,
+    hashedPassword: string,
+  ): Promise<void> {
     await this.prisma.passwordHistory.create({
       data: {
         userId,
-        password: hashedPassword
-      }
+        password: hashedPassword,
+      },
     });
   }
 
-  async blockAccount(userId: string) { //TODO: Update to use Permissions and Roles
-    return await this.performanceService.measureAsync('blockAccount', async () => {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          deletedAt: new Date(),
-        }
-      });
-    });
+  async blockAccount(userId: string) {
+    //TODO: Update to use Permissions and Roles
+    return await this.performanceService.measureAsync(
+      'blockAccount',
+      async () => {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            deletedAt: new Date(),
+          },
+        });
+      },
+    );
   }
 
-  async logoutAllDevices(userId: string, keepSessionId?: string): Promise<{ message: string, sessionsTerminated: number }> {
-    return await this.performanceService.measureAsync('logoutAllDevices', async () => {
-      const sessions = await this.sessionService.getUserSessions(userId);
-      let terminatedCount = 0;
-  
-      for (const sessionId of sessions) {
-        if (!keepSessionId || sessionId !== keepSessionId) {
-          await this.sessionService.destroySession(sessionId);
-          terminatedCount++;
+  async logoutAllDevices(
+    userId: string,
+    keepSessionId?: string,
+  ): Promise<{ message: string; sessionsTerminated: number }> {
+    return await this.performanceService.measureAsync(
+      'logoutAllDevices',
+      async () => {
+        const sessions = await this.sessionService.getUserSessions(userId);
+        let terminatedCount = 0;
+
+        for (const sessionId of sessions) {
+          if (!keepSessionId || sessionId !== keepSessionId) {
+            await this.sessionService.destroySession(sessionId);
+            terminatedCount++;
+          }
         }
-      }
-  
-      // Track metrics
-      this.performanceService.incrementCounter('mass_logout_events');
-      this.performanceService.setGauge('active_sessions_' + userId, keepSessionId ? 1 : 0);
-  
-      return {
-        message: keepSessionId 
-          ? 'Logged out from all other devices' 
-          : 'Logged out from all devices',
-        sessionsTerminated: terminatedCount
-      };
-    });
+
+        // Track metrics
+        this.performanceService.incrementCounter('mass_logout_events');
+        this.performanceService.setGauge(
+          'active_sessions_' + userId,
+          keepSessionId ? 1 : 0,
+        );
+
+        return {
+          message: keepSessionId
+            ? 'Logged out from all other devices'
+            : 'Logged out from all devices',
+          sessionsTerminated: terminatedCount,
+        };
+      },
+    );
   }
 
   private async handleFailedLogin(user: any) {
     const MAX_ATTEMPTS = 8;
     const LOCK_TIME = 15;
-  
+
     const attempts = (user.failedLoginAttempts || 0) + 1;
     const updateData: any = {
       failedLoginAttempts: attempts,
-      lastFailedLoginAttempt: new Date()
+      lastFailedLoginAttempt: new Date(),
     };
-  
+
     if (attempts >= MAX_ATTEMPTS) {
       updateData.accountLocked = true;
       updateData.lockExpires = addMinutes(new Date(), LOCK_TIME);
     }
-  
+
     await this.prisma.user.update({
       where: { id: user.id },
-      data: updateData
+      data: updateData,
     });
-  
+
     if (attempts >= MAX_ATTEMPTS) {
       throw new UnauthorizedException(
-        `Account locked for ${LOCK_TIME} minutes due to too many failed attempts`
+        `Account locked for ${LOCK_TIME} minutes due to too many failed attempts`,
       );
     }
   }
-  
+
   private async resetFailedAttempts(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },
       data: {
         failedLoginAttempts: 0,
         accountLocked: false,
-        lockExpires: null
-      }
+        lockExpires: null,
+      },
     });
   }
 
@@ -343,12 +372,12 @@ export class AuthService {
     return await this.performanceService.measureAsync('register', async () => {
       try {
         this.logger.debug('Starting registration process');
-  
+
         const existingUser = await this.checkIfUserExists({
           email: registerDto.email,
           username: registerDto.username,
         });
-  
+
         if (existingUser) {
           this.performanceService.incrementCounter('duplicate_registrations');
           if (existingUser.email === registerDto.email) {
@@ -363,7 +392,7 @@ export class AuthService {
 
         const verificationToken = uuidv4();
         const verificationExpiry = addMinutes(new Date(), 15);
-  
+
         const user = await this.createUser({
           username: registerDto.username,
           email: registerDto.email,
@@ -375,8 +404,11 @@ export class AuthService {
         });
         await this.savePasswordToHistory(user.id, hashedPassword);
 
-        await this.mailerService.sendEmailVerification(user.email, verificationToken);
-  
+        await this.mailerService.sendEmailVerification(
+          user.email,
+          verificationToken,
+        );
+
         await this.mailerService.sendWelcome(user.email, user.username);
         return this.generateToken(user);
       } catch (error) {
@@ -388,7 +420,7 @@ export class AuthService {
 
   async verifyEmail(token: string): Promise<{ message: string }> {
     const user = await this.prisma.user.findUnique({
-      where: { verificationToken: token }
+      where: { verificationToken: token },
     });
 
     if (!user) {
@@ -417,12 +449,15 @@ export class AuthService {
 
   async resendVerificationEmail(email: string): Promise<{ message: string }> {
     const user = await this.prisma.user.findUnique({
-      where: { email }
+      where: { email },
     });
 
     if (!user) {
       // Return success even if user doesn't exist (security through obscurity)
-      return { message: 'If your email is registered, a verification link has been sent' };
+      return {
+        message:
+          'If your email is registered, a verification link has been sent',
+      };
     }
 
     if (user.isEmailVerified) {
@@ -442,59 +477,67 @@ export class AuthService {
 
     await this.mailerService.sendEmailVerification(email, verificationToken);
 
-    return { message: 'If your email is registered, a verification link has been sent' };
+    return {
+      message: 'If your email is registered, a verification link has been sent',
+    };
   }
 
   async requestPasswordReset(email: string) {
-    return await this.performanceService.measureAsync('requestPasswordReset', async () => {
-      try {
-        const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) {
-        return { message: 'If the email exists, a reset link has been sent' };
-    }
+    return await this.performanceService.measureAsync(
+      'requestPasswordReset',
+      async () => {
+        try {
+          const user = await this.prisma.user.findUnique({ where: { email } });
+          if (!user) {
+            return {
+              message: 'If the email exists, a reset link has been sent',
+            };
+          }
 
-    const token = crypto.randomBytes(32).toString('hex');
-    await this.redisService.set(
-        `pwd_reset:${token}`,
-        user.id,
-        60 * 15,
+          const token = crypto.randomBytes(32).toString('hex');
+          await this.redisService.set(`pwd_reset:${token}`, user.id, 60 * 15);
+
+          await this.mailerService.sendPasswordReset(email, token);
+
+          return { message: 'If the email exists, a reset link has been sent' };
+        } catch (error) {
+          this.logger.error('Request Password Reset error', error.stack);
+          throw error;
+        }
+      },
     );
-
-    await this.mailerService.sendPasswordReset(email, token);
-
-    return { message: 'If the email exists, a reset link has been sent' };
-      } catch (error) {
-        this.logger.error('Request Password Reset error', error.stack);
-        throw error;
-      }
-    });
-}
+  }
 
   async resetPassword(resetDto: ResetPasswordDto) {
-    return await this.performanceService.measureAsync('resetPassword', async () => {
-      try {
-        const userId = await this.redisService.get(`pwd_reset:${resetDto.token}`);
-    if (!userId) {
-      throw new UnauthorizedException('Invalid or expired reset token');
-    }
+    return await this.performanceService.measureAsync(
+      'resetPassword',
+      async () => {
+        try {
+          const userId = await this.redisService.get(
+            `pwd_reset:${resetDto.token}`,
+          );
+          if (!userId) {
+            throw new UnauthorizedException('Invalid or expired reset token');
+          }
 
-    await this.checkPasswordHistory(userId, resetDto.password);
+          await this.checkPasswordHistory(userId, resetDto.password);
 
-    const hashedPassword = await bcrypt.hash(resetDto.password, 10);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword },
-    });
-    this.sessionService.revokeAllUserSessions(userId);
-    await this.savePasswordToHistory(userId, hashedPassword);
+          const hashedPassword = await bcrypt.hash(resetDto.password, 10);
+          await this.prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword },
+          });
+          this.sessionService.revokeAllUserSessions(userId);
+          await this.savePasswordToHistory(userId, hashedPassword);
 
-    await this.redisService.del(`pwd_reset:${resetDto.token}`);
-    return { message: 'Password successfully reset' };
-      } catch (error) {
-        this.logger.error('Request Password Reset error', error.stack);
-        throw error;
-      }
-    });
+          await this.redisService.del(`pwd_reset:${resetDto.token}`);
+          return { message: 'Password successfully reset' };
+        } catch (error) {
+          this.logger.error('Request Password Reset error', error.stack);
+          throw error;
+        }
+      },
+    );
   }
 
   private generateToken(user: any) {

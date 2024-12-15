@@ -13,8 +13,6 @@ export interface MailOptions {
 const ETHEREAL_CACHE_KEY = 'ethereal_account';
 const CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
 
-
-
 @Injectable()
 export class MailerService {
   private transporter: nodemailer.Transporter;
@@ -33,9 +31,9 @@ export class MailerService {
     try {
       if (this.configService.get('NODE_ENV') === 'development') {
         this.logger.debug('Initializing Ethereal Email transport');
-        
+
         const etherealAccount = await this.getOrCreateEtherealAccount();
-        
+
         if (etherealAccount) {
           this.transporter = nodemailer.createTransport({
             host: 'smtp.ethereal.email',
@@ -75,10 +73,10 @@ export class MailerService {
     try {
       // Try to get cached account
       const cachedAccount = await this.redisService.get(ETHEREAL_CACHE_KEY);
-      
+
       if (cachedAccount) {
         const parsed = JSON.parse(cachedAccount);
-        
+
         // Verify cached credentials still work
         try {
           const testTransporter = nodemailer.createTransport({
@@ -91,7 +89,7 @@ export class MailerService {
             },
           });
           await testTransporter.verify();
-          
+
           this.logger.debug('Using cached Ethereal account');
           return parsed;
         } catch (e) {
@@ -103,13 +101,13 @@ export class MailerService {
       // Create new account if none cached
       this.logger.debug('Creating new Ethereal account');
       const testAccount = await nodemailer.createTestAccount();
-      
+
       if (testAccount) {
         // Cache the new account
         await this.redisService.set(
           ETHEREAL_CACHE_KEY,
           JSON.stringify(testAccount),
-          CACHE_TTL
+          CACHE_TTL,
         );
         return testAccount;
       }
@@ -142,12 +140,12 @@ export class MailerService {
       if (!this.transporter) {
         await this.initializeTransporter();
       }
-  
+
       const info = await this.transporter.sendMail({
         from: this.configService.get('SMTP_FROM') || 'noreply@nibblix.com',
         ...options,
       });
-  
+
       if (this.configService.get('NODE_ENV') === 'development') {
         const previewUrl = nodemailer.getTestMessageUrl(info);
         console.log('=============== EMAIL SENT ===============');

@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
@@ -9,41 +9,41 @@ datasource db {
 }
 
 model User {
-  id              String    @id @default(uuid())
-  email           String    @unique
-  username        String    @unique
-  password        String
-  firstName       String?
-  lastName        String?
-  birthDate       DateTime?
-  phoneNumber     String?
+  id          String    @id @default(uuid())
+  email       String    @unique
+  username    String    @unique
+  password    String
+  firstName   String?
+  lastName    String?
+  birthDate   DateTime?
+  phoneNumber String?
 
   // Business related fields
   companyName String?
   vatNumber   String?
 
   // Relations
-  role         Role           @relation(fields: [roleId], references: [id])
-  roleId       String
-  subscription Subscription?
-  billingInfo  BillingInfo?
-  loginHistory LoginHistory[]
+  role            Role              @relation(fields: [roleId], references: [id])
+  roleId          String
+  subscription    Subscription?
+  billingInfo     BillingInfo?
+  loginHistory    LoginHistory[]
   passwordHistory PasswordHistory[]
 
   //Verification
-  isEmailVerified Boolean @default(false)
-  verificationToken String? @unique
+  isEmailVerified    Boolean   @default(false)
+  verificationToken  String?   @unique
   verificationExpiry DateTime?
-  isPhoneVerified Boolean   @default(false)
-  
+  isPhoneVerified    Boolean   @default(false)
+
   // Password recovery
-  passwordResetToken      String?   @unique
-  passwordResetExpires    DateTime?
-  
+  passwordResetToken   String?   @unique
+  passwordResetExpires DateTime?
+
   // Failed login attempts tracking
-  failedLoginAttempts     Int       @default(0)
-  lastFailedLoginAttempt  DateTime?
-  accountLocked           Boolean   @default(false)
+  failedLoginAttempts    Int       @default(0)
+  lastFailedLoginAttempt DateTime?
+  accountLocked          Boolean   @default(false)
   lockExpires            DateTime?
 
   // Timestamps

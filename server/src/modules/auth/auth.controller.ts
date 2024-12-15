@@ -112,11 +112,11 @@ export class AuthController {
   async terminateAllSessions(
     @Headers('session-id') currentSessionId: string,
     @Req() req: Request & { user: any },
-    @Body() body: { keepCurrentSession?: boolean }
+    @Body() body: { keepCurrentSession?: boolean },
   ) {
     const result = await this.authService.logoutAllDevices(
-      req.user.id, 
-      body.keepCurrentSession ? currentSessionId : undefined
+      req.user.id,
+      body.keepCurrentSession ? currentSessionId : undefined,
     );
     return result;
   }
@@ -125,7 +125,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, SessionGuard)
   async extendUserSession(
     @Headers('session-id') sessionId: string,
-    @Body() body: { duration?: number }
+    @Body() body: { duration?: number },
   ) {
     await this.sessionService.extendSession(sessionId, body.duration);
     return { message: 'Session extended successfully' };
@@ -138,7 +138,7 @@ export class AuthController {
     @Headers('session-id') currentSessionId: string,
     @Req() req: Request & { user: any },
     @Body() blockAccountId: string,
-) {
+  ) {
     return this.authService.blockAccount(blockAccountId);
   }
 
