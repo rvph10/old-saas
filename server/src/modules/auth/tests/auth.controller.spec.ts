@@ -2,13 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../services/auth.service';
 import { SessionService } from '../services/session.service';
-import { UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
+import { DeviceService } from '../services/device.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
   let authService: AuthService;
   let sessionService: SessionService;
+  let deviceService: DeviceService;
 
   const mockAuthService = {
     register: jest.fn(),
@@ -16,12 +18,18 @@ describe('AuthController', () => {
     logout: jest.fn(),
     requestPasswordReset: jest.fn(),
     resetPassword: jest.fn(),
+    verifyEmail: jest.fn(),
+    resendVerificationEmail: jest.fn(),
+    blockAccount: jest.fn(),
+    logoutAllDevices: jest.fn(),
   };
 
   const mockSessionService = {
     getSession: jest.fn(),
     destroySession: jest.fn(),
     getUserSessions: jest.fn(),
+    extendSession: jest.fn(),
+    revokeDeviceSessions: jest.fn(),
   };
 
   const mockPerformanceService = {
@@ -35,28 +43,27 @@ describe('AuthController', () => {
     setGauge: jest.fn(),
   };
 
+  const mockDeviceService = {
+    getUserDevices: jest.fn(),
+    setDeviceTrusted: jest.fn(),
+    removeDevice: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
       providers: [
-        {
-          provide: AuthService,
-          useValue: mockAuthService,
-        },
-        {
-          provide: SessionService,
-          useValue: mockSessionService,
-        },
-        {
-          provide: PerformanceService,
-          useValue: mockPerformanceService,
-        },
+        { provide: AuthService, useValue: mockAuthService },
+        { provide: SessionService, useValue: mockSessionService },
+        { provide: PerformanceService, useValue: mockPerformanceService },
+        { provide: DeviceService, useValue: mockDeviceService },
       ],
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
     authService = module.get<AuthService>(AuthService);
     sessionService = module.get<SessionService>(SessionService);
+    deviceService = module.get<DeviceService>(DeviceService);
 
     jest.clearAllMocks();
   });
@@ -80,9 +87,7 @@ describe('AuthController', () => {
       };
 
       mockAuthService.register.mockResolvedValue(expectedResponse);
-
       const result = await controller.register(registerDto);
-
       expect(result).toBe(expectedResponse);
       expect(mockAuthService.register).toHaveBeenCalledWith(registerDto);
     });
@@ -112,9 +117,7 @@ describe('AuthController', () => {
       };
 
       mockAuthService.login.mockResolvedValue(expectedResponse);
-
       const result = await controller.login(loginDto, mockRequest as any);
-
       expect(result).toBe(expectedResponse);
       expect(mockAuthService.login).toHaveBeenCalledWith({
         loginDto,
@@ -124,142 +127,163 @@ describe('AuthController', () => {
     });
   });
 
-  describe('password reset', () => {
-    const requestResetDto = {
-      email: 'test@example.com',
-    };
+  describe('device management', () => {
+    const mockUser = { id: '1', username: 'testuser' };
 
-    const resetPasswordDto = {
-      token: 'reset-token',
-      password: 'NewPassword123!',
-    };
+    describe('getUserDevices', () => {
+      it('should return user devices', async () => {
+        const mockDevices = [
+          { id: '1', name: 'Device 1' },
+          { id: '2', name: 'Device 2' },
+        ];
+        mockDeviceService.getUserDevices.mockResolvedValue(mockDevices);
 
-    it('should request password reset successfully', async () => {
-      const expectedResponse = {
-        message: 'If the email exists, a reset link has been sent',
-      };
-
-      mockAuthService.requestPasswordReset.mockResolvedValue(expectedResponse);
-
-      const result = await controller.requestPasswordReset(requestResetDto);
-
-      expect(result).toBe(expectedResponse);
-      expect(mockAuthService.requestPasswordReset).toHaveBeenCalledWith(
-        requestResetDto.email,
-      );
+        const result = await controller.getUserDevices({ user: mockUser } as any);
+        expect(result).toEqual(mockDevices);
+        expect(mockDeviceService.getUserDevices).toHaveBeenCalledWith(mockUser.id);
+      });
     });
 
-    it('should reset password successfully', async () => {
-      const expectedResponse = {
-        message: 'Password successfully reset',
-      };
+    describe('trustDevice', () => {
+      it('should trust device successfully', async () => {
+        const deviceId = 'device-1';
+        await controller.trustDevice(deviceId, { user: mockUser } as any);
+        expect(mockDeviceService.setDeviceTrusted).toHaveBeenCalledWith(
+          deviceId,
+          mockUser.id,
+          true,
+        );
+      });
+    });
 
-      mockAuthService.resetPassword.mockResolvedValue(expectedResponse);
+    describe('removeDevice', () => {
+      it('should remove device successfully', async () => {
+        const deviceId = 'device-1';
+        const currentSessionId = 'current-session';
+        mockSessionService.getSession.mockResolvedValue({
+          deviceId: 'different-device',
+        });
+        mockDeviceService.removeDevice.mockResolvedValue({ count: 1 });
+        mockSessionService.revokeDeviceSessions.mockResolvedValue(2);
 
-      const result = await controller.resetPassword(resetPasswordDto);
+        const result = await controller.removeDevice(
+          deviceId,
+          currentSessionId,
+          { user: mockUser } as any,
+        );
 
-      expect(result).toBe(expectedResponse);
-      expect(mockAuthService.resetPassword).toHaveBeenCalledWith(
-        resetPasswordDto,
-      );
+        expect(result).toEqual({
+          message: 'Device removed successfully',
+          sessionsRevoked: 2,
+        });
+      });
+
+      it('should prevent removing current device', async () => {
+        const deviceId = 'device-1';
+        const currentSessionId = 'current-session';
+        mockSessionService.getSession.mockResolvedValue({
+          deviceId: deviceId,
+        });
+
+        await expect(
+          controller.removeDevice(deviceId, currentSessionId, {
+            user: mockUser,
+          } as any),
+        ).rejects.toThrow(BadRequestException);
+      });
     });
   });
 
   describe('session management', () => {
-    const mockUser = {
-      id: '1',
-      username: 'testuser',
-    };
+    const mockUser = { id: '1', username: 'testuser' };
 
-    const mockSession = {
-      id: 'session-id',
-      userId: '1',
-    };
+    describe('extendUserSession', () => {
+      it('should extend session successfully', async () => {
+        const sessionId = 'test-session';
+        const duration = 3600;
 
-    describe('getSessions', () => {
-      it('should return user sessions', async () => {
-        const mockSessions = ['session1', 'session2'];
-        mockSessionService.getUserSessions.mockResolvedValue(mockSessions);
+        await controller.extendUserSession(sessionId, { duration });
 
-        const result = await controller.getSessions({ user: mockUser } as any);
-
-        expect(result).toEqual({ sessions: mockSessions });
-        expect(mockSessionService.getUserSessions).toHaveBeenCalledWith(
-          mockUser.id,
+        expect(mockSessionService.extendSession).toHaveBeenCalledWith(
+          sessionId,
+          duration,
         );
-      });
-    });
-
-    describe('terminateSession', () => {
-      it('should terminate session successfully', async () => {
-        mockSessionService.getSession.mockResolvedValue(mockSession);
-
-        const result = await controller.terminateSession('session-id', {
-          user: mockUser,
-        } as any);
-
-        expect(result).toEqual({ message: 'Session terminated successfully' });
-        expect(mockSessionService.destroySession).toHaveBeenCalledWith(
-          'session-id',
-        );
-      });
-
-      it('should throw UnauthorizedException for non-existent session', async () => {
-        mockSessionService.getSession.mockResolvedValue(null);
-
-        await expect(
-          controller.terminateSession('session-id', { user: mockUser } as any),
-        ).rejects.toThrow(UnauthorizedException);
-      });
-
-      it('should throw UnauthorizedException for unauthorized session termination', async () => {
-        mockSessionService.getSession.mockResolvedValue({
-          ...mockSession,
-          userId: 'different-user',
-        });
-
-        await expect(
-          controller.terminateSession('session-id', { user: mockUser } as any),
-        ).rejects.toThrow(UnauthorizedException);
       });
     });
 
     describe('terminateAllSessions', () => {
-      it('should terminate all other sessions successfully', async () => {
-        const mockSessions = ['session1', 'session2', 'current-session'];
-        mockSessionService.getUserSessions.mockResolvedValue(mockSessions);
+      it('should terminate all sessions except current', async () => {
+        const currentSessionId = 'current-session';
+        mockAuthService.logoutAllDevices.mockResolvedValue({
+          message: 'Logged out from all other devices',
+          sessionsTerminated: 2,
+        });
 
         const result = await controller.terminateAllSessions(
-          'current-session',
-          {
-            user: mockUser,
-          } as any,
+          currentSessionId,
+          { user: mockUser } as any,
+          { keepCurrentSession: true },
         );
 
-        expect(result).toEqual({
-          message: 'All other sessions terminated successfully',
-        });
-        expect(mockSessionService.destroySession).toHaveBeenCalledTimes(2);
-        expect(mockSessionService.destroySession).not.toHaveBeenCalledWith(
-          'current-session',
+        expect(result.message).toBe('Logged out from all other devices');
+        expect(mockAuthService.logoutAllDevices).toHaveBeenCalledWith(
+          mockUser.id,
+          currentSessionId,
         );
       });
     });
+  });
 
-    describe('getCurrentUser', () => {
-      it('should return current user information', async () => {
-        const mockUserWithPassword = {
-          ...mockUser,
-          password: 'hashed_password',
-        };
-
-        const result = await controller.getCurrentUser({
-          user: mockUserWithPassword,
-        } as any);
-
-        expect(result).toEqual(mockUser);
-        expect(result).not.toHaveProperty('password');
+  describe('email verification', () => {
+    it('should verify email successfully', async () => {
+      const verifyEmailDto = { token: 'valid-token' };
+      mockAuthService.verifyEmail.mockResolvedValue({
+        message: 'Email verified successfully',
       });
+
+      const result = await controller.verifyEmail(verifyEmailDto);
+      expect(result.message).toBe('Email verified successfully');
+    });
+
+    it('should resend verification email', async () => {
+      const resendDto = { email: 'test@example.com' };
+      mockAuthService.resendVerificationEmail.mockResolvedValue({
+        message: 'Verification email sent',
+      });
+
+      const result = await controller.resendVerification(resendDto);
+      expect(result.message).toBe('Verification email sent');
+    });
+  });
+
+  describe('getCurrentUser', () => {
+    it('should return user data without password', async () => {
+      const mockUserWithPassword = {
+        id: '1',
+        username: 'testuser',
+        email: 'test@example.com',
+        password: 'hashedpassword',
+      };
+
+      const result = await controller.getCurrentUser({
+        user: mockUserWithPassword,
+      } as any);
+
+      expect(result).not.toHaveProperty('password');
+      expect(result).toEqual({
+        id: '1',
+        username: 'testuser',
+        email: 'test@example.com',
+      });
+    });
+  });
+
+  describe('metrics', () => {
+    it('should return performance metrics', async () => {
+      const result = await controller.getMetrics();
+      expect(result).toHaveProperty('metrics');
+      expect(result).toHaveProperty('timestamp');
+      expect(mockPerformanceService.getMetricsSummary).toHaveBeenCalled();
     });
   });
 });

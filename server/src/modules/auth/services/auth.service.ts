@@ -233,7 +233,7 @@ export class AuthService {
     });
   }
 
-  private async checkPasswordHistory(
+  async checkPasswordHistory(
     userId: string,
     newPassword: string,
   ): Promise<boolean> {
@@ -254,7 +254,7 @@ export class AuthService {
     return true;
   }
 
-  private async savePasswordToHistory(
+  async savePasswordToHistory(
     userId: string,
     hashedPassword: string,
   ): Promise<void> {
