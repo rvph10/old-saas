@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -16,8 +17,6 @@ model User {
   lastName        String?
   birthDate       DateTime?
   phoneNumber     String?
-  isEmailVerified Boolean   @default(false)
-  isPhoneVerified Boolean   @default(false)
 
   // Business related fields
   companyName String?
@@ -29,6 +28,13 @@ model User {
   subscription Subscription?
   billingInfo  BillingInfo?
   loginHistory LoginHistory[]
+
+  //Verification
+  isEmailVerified Boolean @default(false)
+  verificationToken String? @unique
+  verificationExpiry DateTime?
+  isPhoneVerified Boolean   @default(false)
+  
 
   // Timestamps
   createdAt DateTime  @default(now())

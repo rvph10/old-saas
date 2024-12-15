@@ -2,12 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../auth.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Logger, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../session.service';
 import { RedisService } from '../../../redis/redis.service';
 import { MailerService } from '../../mail/mail.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
+import { addMinutes } from 'date-fns';
+import { isEmail } from 'class-validator';
+
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -58,10 +61,18 @@ describe('AuthService', () => {
     del: jest.fn(),
   };
 
+  const mockLogger = {
+    log: jest.fn(),
+    warn: jest.fn(),
+    debug: jest.fn(),
+    verbose: jest.fn(),
+  };
+
   const mockMailerService = {
     sendMail: jest.fn(),
     sendPasswordReset: jest.fn(),
     sendWelcome: jest.fn(),
+    sendEmailVerification: jest.fn().mockResolvedValue(true),
   };
 
   beforeEach(async () => {
@@ -91,6 +102,10 @@ describe('AuthService', () => {
         {
           provide: PerformanceService,
           useValue: mockPerformanceService,
+        },
+        {
+          provide: Logger,
+          useValue: mockLogger,
         }
       ],
     }).compile();
@@ -131,6 +146,9 @@ describe('AuthService', () => {
 
     it('should register a new user successfully', async () => {
       const hashedPassword = 'hashedPassword';
+      const verificationToken = 'test-token';
+      const verificationExpiry = new Date();
+
       jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
       mockPrismaService.user.findFirst.mockResolvedValue(null);
       mockPrismaService.user.create.mockResolvedValue({
@@ -138,6 +156,9 @@ describe('AuthService', () => {
         id: '1',
         password: hashedPassword,
         roleId: 'default-role-id',
+        isEmailVerified: false,
+        verificationToken,
+        verificationExpiry,
       });
       mockJwtService.sign.mockReturnValue('jwt_token');
 
@@ -145,11 +166,15 @@ describe('AuthService', () => {
 
       expect(result).toHaveProperty('access_token');
       expect(result).toHaveProperty('user');
+      expect(mockMailerService.sendEmailVerification).toHaveBeenCalled();
       expect(mockPrismaService.user.create).toHaveBeenCalledWith({
         data: {
           ...registerDto,
           password: hashedPassword,
           roleId: 'default-role-id',
+          isEmailVerified: false,
+          verificationToken: expect.any(String),
+          verificationExpiry: expect.any(Date),
         },
         include: {
           role: true,
@@ -184,6 +209,7 @@ describe('AuthService', () => {
         username: loginDto.username,
         password: 'hashedPassword',
         email: 'test@example.com',
+        isEmailVerified: true,
       };
 
       mockPrismaService.user.findFirst.mockResolvedValue(user);
@@ -205,6 +231,26 @@ describe('AuthService', () => {
         password: 'hashedPassword',
       });
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
+
+      await expect(
+        service.login({
+          loginDto,
+          ipAddress: '127.0.0.1',
+          userAgent: 'test-agent',
+        }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException if email is not verified', async () => {
+      const user = {
+        id: '1',
+        username: loginDto.username,
+        password: 'hashedPassword',
+        email: 'test@example.com',
+        isEmailVerified: false,
+      };
+
+      mockPrismaService.user.findFirst.mockResolvedValue(user);
 
       await expect(
         service.login({
@@ -245,6 +291,7 @@ describe('AuthService', () => {
         id: '1',
         role: defaultRole,
         roleId: defaultRole.id,
+        isEmailVerified: false,
       });
 
       const result = await service.createUser(userData);
@@ -254,8 +301,13 @@ describe('AuthService', () => {
       expect(result.role).toEqual(defaultRole);
       expect(mockPrismaService.user.create).toHaveBeenCalledWith({
         data: {
-          ...userData,
+          username: userData.username,
+          email: userData.email,
+          password: userData.password,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
           roleId: defaultRole.id,
+          isEmailVerified: false,
         },
         include: {
           role: true,
@@ -312,6 +364,7 @@ describe('AuthService', () => {
         username: loginDto.username,
         password: 'hashedPassword',
         email: 'test@example.com',
+        isEmailVerified: true,
       };
 
       mockPrismaService.user.findFirst.mockResolvedValue(user);
@@ -400,6 +453,57 @@ describe('AuthService', () => {
       await expect(
         service.resetPassword({ token, password: 'newPassword123!' }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('Email Verification', () => {
+    const verificationToken = 'test-token';
+    const email = 'test@example.com';
+  
+    describe('verifyEmail', () => {
+      it('should verify email successfully', async () => {
+        const user = {
+          id: '1',
+          email,
+          isEmailVerified: false,
+          verificationToken,
+          verificationExpiry: addMinutes(new Date(), 15),
+        };
+  
+        mockPrismaService.user.findUnique.mockResolvedValue(user);
+        mockPrismaService.user.update.mockResolvedValue({
+          ...user,
+          isEmailVerified: true,
+        });
+  
+        const result = await service.verifyEmail(verificationToken);
+        expect(result.message).toBe('Email verified successfully');
+      });
+  
+      it('should throw error for invalid token', async () => {
+        mockPrismaService.user.findUnique.mockResolvedValue(null);
+  
+        await expect(service.verifyEmail('invalid-token'))
+          .rejects.toThrow(UnauthorizedException);
+      });
+  
+      it('should throw error for expired token', async () => {
+        const pastDate = new Date();  
+        pastDate.setMinutes(pastDate.getMinutes() - 30);
+
+        const user = {
+          id: '1',
+          email,
+          isEmailVerified: false,
+          verificationToken,
+          verificationExpiry: pastDate,
+        };
+  
+        mockPrismaService.user.findUnique.mockResolvedValue(user);
+  
+        await expect(service.verifyEmail(verificationToken))
+          .rejects.toThrow(UnauthorizedException);
+      });
     });
   });
 });

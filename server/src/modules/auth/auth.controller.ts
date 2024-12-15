@@ -22,6 +22,7 @@ import { JwtAuthGuard } from './guard/jwt-auth.guard';
 import { SessionService } from './session.service';
 import { SessionGuard } from './guard/session.guard';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
+import { ResendVerificationDto, VerifyEmailDto } from './dto/verifiy-email.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -122,6 +123,18 @@ export class AuthController {
     }
 
     return { message: 'All other sessions terminated successfully' };
+  }
+
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    return this.authService.verifyEmail(verifyEmailDto.token);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  async resendVerification(@Body() resendDto: ResendVerificationDto) {
+    return this.authService.resendVerificationEmail(resendDto.email);
   }
 
   @Get('me')

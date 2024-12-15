@@ -14,7 +14,9 @@ import { SessionService } from './session.service';
 import { RedisService } from '../../redis/redis.service';
 import { ResetPasswordDto } from './dto/password-reset.dto';
 import { MailerService } from '../mail/mail.service';
-import { PerformanceService } from 'src/common/monitoring/performance.service';
+import { v4 as uuidv4 } from 'uuid';
+import { addMinutes } from 'date-fns';
+import { PerformanceService } from '../../common/monitoring/performance.service';
 
 @Injectable()
 export class AuthService {
@@ -39,9 +41,11 @@ export class AuthService {
     password: string;
     firstName: string;
     lastName: string;
+    verificationToken?: string;
+    verificationExpiry?: Date;
+    isEmailVerified?: boolean;
   }) {
     const defaultRole = await this.getDefaultRole();
-    this.logger.debug('Creating user in database');
     return this.prisma.user.create({
       data: {
         username: data.username,
@@ -50,6 +54,9 @@ export class AuthService {
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
+        verificationToken: data.verificationToken,
+        verificationExpiry: data.verificationExpiry,
+        isEmailVerified: false,
       },
       include: {
         role: true,
@@ -150,12 +157,18 @@ export class AuthService {
       try {
         this.performanceService.incrementCounter(`login_attempts_${data.ipAddress}`);
       
-      const user = await this.getUser({ username: data.loginDto.username });
+      const user = await this.checkIfUserExists({
+        username: data.loginDto.username,
+        email: data.loginDto.username,
+      })
 
       if (!user || user.deletedAt) {
-        // Track failed logins
         this.performanceService.incrementCounter('failed_logins');
         throw new UnauthorizedException('Invalid credentials');
+      }
+      
+      if (!user.isEmailVerified) {
+        throw new UnauthorizedException('Please verify your email before logging in');
       }
 
       const isPasswordValid = await bcrypt.compare(
@@ -164,7 +177,6 @@ export class AuthService {
       );
       
       if (!isPasswordValid) {
-        // Track invalid passwords
         this.performanceService.incrementCounter('invalid_passwords');
         throw new UnauthorizedException('Invalid credentials');
       }
@@ -227,6 +239,9 @@ export class AuthService {
         }
         this.performanceService.incrementCounter('successful_registrations');
         const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+        const verificationToken = uuidv4();
+        const verificationExpiry = addMinutes(new Date(), 15);
   
         const user = await this.createUser({
           username: registerDto.username,
@@ -234,7 +249,11 @@ export class AuthService {
           password: hashedPassword,
           firstName: registerDto.firstName,
           lastName: registerDto.lastName,
+          verificationToken,
+          verificationExpiry,
         });
+
+        await this.mailerService.sendEmailVerification(user.email, verificationToken);
   
         await this.mailerService.sendWelcome(user.email, user.username);
         return this.generateToken(user);
@@ -243,6 +262,65 @@ export class AuthService {
         throw error;
       }
     });
+  }
+
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { verificationToken: token }
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid verification token');
+    }
+
+    if (user.isEmailVerified) {
+      return { message: 'Email already verified' };
+    }
+
+    if (user.verificationExpiry && new Date() > user.verificationExpiry) {
+      throw new UnauthorizedException('Verification token has expired');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isEmailVerified: true,
+        verificationToken: null,
+        verificationExpiry: null,
+      },
+    });
+
+    return { message: 'Email verified successfully' };
+  }
+
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (!user) {
+      // Return success even if user doesn't exist (security through obscurity)
+      return { message: 'If your email is registered, a verification link has been sent' };
+    }
+
+    if (user.isEmailVerified) {
+      return { message: 'Email already verified' };
+    }
+
+    // Generate new verification token
+    const verificationToken = uuidv4();
+    const verificationExpiry = addMinutes(new Date(), 15);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verificationToken,
+        verificationExpiry,
+      },
+    });
+
+    await this.mailerService.sendEmailVerification(email, verificationToken);
+
+    return { message: 'If your email is registered, a verification link has been sent' };
   }
 
   async requestPasswordReset(email: string) {
