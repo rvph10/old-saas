@@ -2,10 +2,11 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { RedisService } from 'src/redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
+import { DeviceService } from './device.service';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
 
 @Injectable()
 export class SessionService {
@@ -13,17 +14,27 @@ export class SessionService {
   private readonly SESSION_TTL = 24 * 60 * 60;
   private readonly SESSION_REFRESH_THRESHOLD = 60 * 60;
 
-  constructor(private readonly redisService: RedisService) {}
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly deviceService: DeviceService,
+    private readonly performanceService: PerformanceService,
+  ) {}
 
   async createSession(userId: string, metadata: any = {}): Promise<string> {
-    const sessionId = uuidv4();
+    const deviceId = await this.deviceService.registerDevice(
+      userId,
+      metadata.userAgent,
+    );
+
     const sessionData = {
       userId,
+      deviceId,
       createdAt: new Date().toISOString(),
       lastActivity: new Date().toISOString(),
       ...metadata,
     };
 
+    const sessionId = uuidv4();
     await this.redisService.set(
       `${this.SESSION_PREFIX}${sessionId}`,
       JSON.stringify(sessionData),
@@ -49,6 +60,44 @@ export class SessionService {
     }
 
     return session;
+  }
+
+  async revokeDeviceSessions(
+    userId: string,
+    deviceId: string,
+  ): Promise<number> {
+    const sessions = await this.getUserSessions(userId);
+    let revokedCount = 0;
+
+    for (const sessionId of sessions) {
+      const session = await this.getSession(sessionId);
+      if (session && session.deviceId === deviceId) {
+        await this.destroySession(sessionId);
+        revokedCount++;
+      }
+    }
+
+    // Track metric
+    this.performanceService.incrementCounter('device_sessions_revoked');
+
+    return revokedCount;
+  }
+
+  async getUserSessionsByDevice(
+    userId: string,
+    deviceId: string,
+  ): Promise<string[]> {
+    const sessions = await this.getUserSessions(userId);
+    const deviceSessions = [];
+
+    for (const sessionId of sessions) {
+      const session = await this.getSession(sessionId);
+      if (session && session.deviceId === deviceId) {
+        deviceSessions.push(sessionId);
+      }
+    }
+
+    return deviceSessions;
   }
 
   async refreshSession(sessionId: string, session: any): Promise<void> {

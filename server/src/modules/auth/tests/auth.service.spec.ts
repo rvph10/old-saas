@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthService } from '../auth.service';
+import { AuthService } from '../services/auth.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -8,7 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { SessionService } from '../session.service';
+import { SessionService } from '../services/session.service';
 import { RedisService } from '../../../redis/redis.service';
 import { MailerService } from '../../mail/mail.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';

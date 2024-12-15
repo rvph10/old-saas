@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { SessionService } from '../session.service';
+import { SessionService } from '../services/session.service';
 
 @Injectable()
 export class SessionMiddleware implements NestMiddleware {

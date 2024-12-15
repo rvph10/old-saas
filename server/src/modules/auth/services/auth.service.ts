@@ -7,18 +7,17 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
-import { PrismaService } from '../../prisma/prisma.service';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { LoginDto } from '../dto/login.dto';
+import { RegisterDto } from '../dto/register.dto';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from './session.service';
-import { RedisService } from '../../redis/redis.service';
-import { ResetPasswordDto } from './dto/password-reset.dto';
-import { MailerService } from '../mail/mail.service';
+import { RedisService } from '../../../redis/redis.service';
+import { ResetPasswordDto } from '../dto/password-reset.dto';
+import { MailerService } from '../../mail/mail.service';
 import { v4 as uuidv4 } from 'uuid';
 import { addMinutes, differenceInMinutes } from 'date-fns';
-import { PerformanceService } from '../../common/monitoring/performance.service';
-import { DEFAULT_DEPRECATION_REASON } from 'graphql';
+import { PerformanceService } from '../../../common/monitoring/performance.service';
 
 @Injectable()
 export class AuthService {

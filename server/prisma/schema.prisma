@@ -29,6 +29,7 @@ model User {
   billingInfo     BillingInfo?
   loginHistory    LoginHistory[]
   passwordHistory PasswordHistory[]
+  devices         UserDevice[]
 
   //Verification
   isEmailVerified    Boolean   @default(false)
@@ -50,6 +51,22 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+}
+
+model UserDevice {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  deviceId   String   @unique
+  deviceName String
+  deviceType String?
+  browser    String?
+  os         String?
+  isTrusted  Boolean  @default(false)
+  lastUsedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
 }
 
 model PasswordHistory {

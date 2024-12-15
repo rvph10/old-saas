@@ -11,18 +11,20 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { AuthService } from './auth.service';
+import { AuthService } from './services/auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestResetDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
-import { SessionService } from './session.service';
+import { SessionService } from './services/session.service';
 import { SessionGuard } from './guard/session.guard';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { ResendVerificationDto, VerifyEmailDto } from './dto/verifiy-email.dto';
+import { DeviceService } from './services/device.service';
 
 @Controller('auth')
 export class AuthController {
@@ -30,7 +32,50 @@ export class AuthController {
     private authService: AuthService,
     private sessionService: SessionService,
     private performanceService: PerformanceService,
+    private deviceService: DeviceService,
   ) {}
+
+  @Get('devices')
+  @UseGuards(JwtAuthGuard)
+  async getUserDevices(@Req() req: Request & { user: any }) {
+    return this.deviceService.getUserDevices(req.user.id);
+  }
+
+  @Post('devices/:deviceId/trust')
+  @UseGuards(JwtAuthGuard)
+  async trustDevice(
+    @Param('deviceId') deviceId: string,
+    @Req() req: Request & { user: any },
+  ) {
+    await this.deviceService.setDeviceTrusted(deviceId, req.user.id, true);
+    return { message: 'Device trusted successfully' };
+  }
+
+  @Delete('devices/:deviceId')
+  @UseGuards(JwtAuthGuard)
+  async removeDevice(
+    @Param('deviceId') deviceId: string,
+    @Headers('session-id') currentSessionId: string,
+    @Req() req: Request & { user: any },
+  ) {
+    // Check if trying to remove current device
+    const currentSession =
+      await this.sessionService.getSession(currentSessionId);
+    if (currentSession?.deviceId === deviceId) {
+      throw new BadRequestException('Cannot remove currently active device');
+    }
+
+    await this.deviceService.removeDevice(deviceId, req.user.id);
+    const revokedSessions = await this.sessionService.revokeDeviceSessions(
+      req.user.id,
+      deviceId,
+    );
+
+    return {
+      message: 'Device removed successfully',
+      sessionsRevoked: revokedSessions,
+    };
+  }
 
   @Get('metrics')
   @UseGuards(JwtAuthGuard)

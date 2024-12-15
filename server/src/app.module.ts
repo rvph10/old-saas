@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import configuration from './config/configuration';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AuthModule } from './modules/auth/auth.module';
+import { AuthModule } from './modules/auth/module/auth.module';
 import { SessionMiddleware } from './modules/auth/middleware/session.middleware';
 import { RateLimitMiddleware } from './modules/auth/middleware/rate-limit.middleware';
 import { RequestLoggerMiddleware } from './modules/auth/middleware/request-logger.middleware';
