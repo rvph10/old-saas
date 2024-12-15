@@ -28,6 +28,7 @@ model User {
   subscription Subscription?
   billingInfo  BillingInfo?
   loginHistory LoginHistory[]
+  passwordHistory PasswordHistory[]
 
   //Verification
   isEmailVerified Boolean @default(false)
@@ -49,6 +50,16 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+}
+
+model PasswordHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  password  String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Role {

@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
@@ -17,6 +18,7 @@ import { MailerService } from '../mail/mail.service';
 import { v4 as uuidv4 } from 'uuid';
 import { addMinutes, differenceInMinutes } from 'date-fns';
 import { PerformanceService } from '../../common/monitoring/performance.service';
+import { DEFAULT_DEPRECATION_REASON } from 'graphql';
 
 @Injectable()
 export class AuthService {
@@ -224,6 +226,67 @@ export class AuthService {
     });
   }
 
+  private async checkPasswordHistory(userId: string, newPassword: string): Promise<boolean> {
+    const recentPasswords = await this.prisma.passwordHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+  
+    for (const historical of recentPasswords) {
+      if (await bcrypt.compare(newPassword, historical.password)) {
+        throw new BadRequestException('Cannot reuse one of your last 5 passwords');
+      }
+    }
+  
+    return true;
+  }
+  
+  private async savePasswordToHistory(userId: string, hashedPassword: string): Promise<void> {
+    await this.prisma.passwordHistory.create({
+      data: {
+        userId,
+        password: hashedPassword
+      }
+    });
+  }
+
+  async blockAccount(userId: string) { //TODO: Update to use Permissions and Roles
+    return await this.performanceService.measureAsync('blockAccount', async () => {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          deletedAt: new Date(),
+        }
+      });
+    });
+  }
+
+  async logoutAllDevices(userId: string, keepSessionId?: string): Promise<{ message: string, sessionsTerminated: number }> {
+    return await this.performanceService.measureAsync('logoutAllDevices', async () => {
+      const sessions = await this.sessionService.getUserSessions(userId);
+      let terminatedCount = 0;
+  
+      for (const sessionId of sessions) {
+        if (!keepSessionId || sessionId !== keepSessionId) {
+          await this.sessionService.destroySession(sessionId);
+          terminatedCount++;
+        }
+      }
+  
+      // Track metrics
+      this.performanceService.incrementCounter('mass_logout_events');
+      this.performanceService.setGauge('active_sessions_' + userId, keepSessionId ? 1 : 0);
+  
+      return {
+        message: keepSessionId 
+          ? 'Logged out from all other devices' 
+          : 'Logged out from all devices',
+        sessionsTerminated: terminatedCount
+      };
+    });
+  }
+
   private async handleFailedLogin(user: any) {
     const MAX_ATTEMPTS = 8;
     const LOCK_TIME = 15;
@@ -269,6 +332,13 @@ export class AuthService {
     });
   }
 
+  async logoutAll(userId: string) {
+    return await this.performanceService.measureAsync('logoutAll', async () => {
+      await this.sessionService.revokeAllUserSessions(userId);
+      return { message: 'Logged out of all sessions' };
+    });
+  }
+
   async register(registerDto: RegisterDto) {
     return await this.performanceService.measureAsync('register', async () => {
       try {
@@ -303,6 +373,7 @@ export class AuthService {
           verificationToken,
           verificationExpiry,
         });
+        await this.savePasswordToHistory(user.id, hashedPassword);
 
         await this.mailerService.sendEmailVerification(user.email, verificationToken);
   
@@ -379,7 +450,6 @@ export class AuthService {
       try {
         const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
-        // Return success even if user doesn't exist (security)
         return { message: 'If the email exists, a reset link has been sent' };
     }
 
@@ -408,11 +478,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired reset token');
     }
 
+    await this.checkPasswordHistory(userId, resetDto.password);
+
     const hashedPassword = await bcrypt.hash(resetDto.password, 10);
     await this.prisma.user.update({
       where: { id: userId },
       data: { password: hashedPassword },
     });
+    this.sessionService.revokeAllUserSessions(userId);
+    await this.savePasswordToHistory(userId, hashedPassword);
 
     await this.redisService.del(`pwd_reset:${resetDto.token}`);
     return { message: 'Password successfully reset' };

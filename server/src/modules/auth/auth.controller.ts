@@ -68,7 +68,7 @@ export class AuthController {
 
   @Post('password-reset/request')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 3, ttl: 300000 } }) // 5 minutes
+  @Throttle({ default: { limit: 3, ttl: 300000 } })
   async requestPasswordReset(@Body() resetDto: RequestResetDto) {
     return this.authService.requestPasswordReset(resetDto.email);
   }
@@ -106,23 +106,40 @@ export class AuthController {
     return { message: 'Session terminated successfully' };
   }
 
-  @Delete('sessions')
+  @Delete('logout-all')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   async terminateAllSessions(
     @Headers('session-id') currentSessionId: string,
     @Req() req: Request & { user: any },
+    @Body() body: { keepCurrentSession?: boolean }
   ) {
-    const sessions = await this.sessionService.getUserSessions(req.user.id);
+    const result = await this.authService.logoutAllDevices(
+      req.user.id, 
+      body.keepCurrentSession ? currentSessionId : undefined
+    );
+    return result;
+  }
 
-    for (const sessionId of sessions) {
-      // Skip the current session
-      if (sessionId !== currentSessionId) {
-        await this.sessionService.destroySession(sessionId);
-      }
-    }
+  @Post('extend-session')
+  @UseGuards(JwtAuthGuard, SessionGuard)
+  async extendUserSession(
+    @Headers('session-id') sessionId: string,
+    @Body() body: { duration?: number }
+  ) {
+    await this.sessionService.extendSession(sessionId, body.duration);
+    return { message: 'Session extended successfully' };
+  }
 
-    return { message: 'All other sessions terminated successfully' };
+  @Post('block')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async blockUser(
+    @Headers('session-id') currentSessionId: string,
+    @Req() req: Request & { user: any },
+    @Body() blockAccountId: string,
+) {
+    return this.authService.blockAccount(blockAccountId);
   }
 
   @Post('verify-email')
@@ -140,7 +157,6 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@Req() req: Request & { user: any }) {
-    // Remove sensitive information
     const { password, ...user } = req.user;
     return user;
   }
