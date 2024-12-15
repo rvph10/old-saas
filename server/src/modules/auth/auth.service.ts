@@ -15,7 +15,7 @@ import { RedisService } from '../../redis/redis.service';
 import { ResetPasswordDto } from './dto/password-reset.dto';
 import { MailerService } from '../mail/mail.service';
 import { v4 as uuidv4 } from 'uuid';
-import { addMinutes } from 'date-fns';
+import { addMinutes, differenceInMinutes } from 'date-fns';
 import { PerformanceService } from '../../common/monitoring/performance.service';
 
 @Injectable()
@@ -155,34 +155,47 @@ export class AuthService {
   }) {
     return await this.performanceService.measureAsync('login', async () => {
       try {
-        this.performanceService.incrementCounter(`login_attempts_${data.ipAddress}`);
-      
-      const user = await this.checkIfUserExists({
-        username: data.loginDto.username,
-        email: data.loginDto.username,
-      })
-
-      if (!user || user.deletedAt) {
-        this.performanceService.incrementCounter('failed_logins');
-        throw new UnauthorizedException('Invalid credentials');
-      }
-      
-      if (!user.isEmailVerified) {
-        throw new UnauthorizedException('Please verify your email before logging in');
-      }
-
-      const isPasswordValid = await bcrypt.compare(
-        data.loginDto.password,
-        user.password,
-      );
-      
-      if (!isPasswordValid) {
-        this.performanceService.incrementCounter('invalid_passwords');
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      // Track successful logins
-      this.performanceService.incrementCounter('successful_logins');
+        const user = await this.checkIfUserExists({
+          username: data.loginDto.username,
+          email: data.loginDto.username,
+        });
+  
+        if (!user || user.deletedAt) {
+          this.performanceService.incrementCounter('failed_logins');
+          throw new UnauthorizedException('Invalid credentials');
+        }
+  
+        if (!user.isEmailVerified) {
+          throw new UnauthorizedException('Please verify your email before logging in');
+        }
+  
+        // Check if account is locked
+        if (user.accountLocked && user.lockExpires) {
+          if (user.lockExpires > new Date()) {
+            const remainingMinutes = differenceInMinutes(user.lockExpires, new Date());
+            throw new UnauthorizedException(
+              `Account locked. Try again in ${remainingMinutes} minutes`
+            );
+          } else {
+            await this.resetFailedAttempts(user.id);
+          }
+        }
+  
+        const isPasswordValid = await bcrypt.compare(
+          data.loginDto.password,
+          user.password
+        );
+  
+        if (!isPasswordValid) {
+          await this.handleFailedLogin(user);
+          throw new UnauthorizedException('Invalid credentials');
+        }
+  
+        // Reset failed attempts on successful login
+        await this.resetFailedAttempts(user.id);
+  
+        // Track successful logins
+        this.performanceService.incrementCounter('successful_logins');
       
       // Track active sessions
       this.performanceService.setGauge('active_sessions', 
@@ -207,6 +220,44 @@ export class AuthService {
       } catch (error) {
         this.logger.error('Login failed', error.stack);
         throw error;
+      }
+    });
+  }
+
+  private async handleFailedLogin(user: any) {
+    const MAX_ATTEMPTS = 8;
+    const LOCK_TIME = 15;
+  
+    const attempts = (user.failedLoginAttempts || 0) + 1;
+    const updateData: any = {
+      failedLoginAttempts: attempts,
+      lastFailedLoginAttempt: new Date()
+    };
+  
+    if (attempts >= MAX_ATTEMPTS) {
+      updateData.accountLocked = true;
+      updateData.lockExpires = addMinutes(new Date(), LOCK_TIME);
+    }
+  
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: updateData
+    });
+  
+    if (attempts >= MAX_ATTEMPTS) {
+      throw new UnauthorizedException(
+        `Account locked for ${LOCK_TIME} minutes due to too many failed attempts`
+      );
+    }
+  }
+  
+  private async resetFailedAttempts(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        failedLoginAttempts: 0,
+        accountLocked: false,
+        lockExpires: null
       }
     });
   }

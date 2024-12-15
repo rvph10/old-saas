@@ -35,6 +35,15 @@ model User {
   verificationExpiry DateTime?
   isPhoneVerified Boolean   @default(false)
   
+  // Password recovery
+  passwordResetToken      String?   @unique
+  passwordResetExpires    DateTime?
+  
+  // Failed login attempts tracking
+  failedLoginAttempts     Int       @default(0)
+  lastFailedLoginAttempt  DateTime?
+  accountLocked           Boolean   @default(false)
+  lockExpires            DateTime?
 
   // Timestamps
   createdAt DateTime  @default(now())

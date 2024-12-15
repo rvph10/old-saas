@@ -14,6 +14,16 @@ describe('SessionService', () => {
     keys: jest.fn(),
   };
 
+  jest.mock('@nestjs/common', () => ({
+    ...jest.requireActual('@nestjs/common'),
+    Logger: jest.fn().mockImplementation(() => ({
+      log: jest.fn(),
+      error: jest.fn(),
+      warn: jest.fn(),
+      debug: jest.fn(),
+    })),
+  }));
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
