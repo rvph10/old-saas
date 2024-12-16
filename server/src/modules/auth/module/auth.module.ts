@@ -13,6 +13,7 @@ import { DeviceService } from '../services/device.service';
 import { DeviceModule } from './device.module';
 import { TwoFactorService } from '../services/two-factor.service';
 import { LocationService } from '../services/location.service';
+import { PasswordService } from '../services/password.service';
 
 @Module({
   imports: [
@@ -39,7 +40,8 @@ import { LocationService } from '../services/location.service';
     DeviceService,
     LocationService,
     TwoFactorService,
+    PasswordService
   ],
-  exports: [AuthService, SessionService, DeviceService],
+  exports: [AuthService, SessionService, DeviceService, PasswordService],
 })
 export class AuthModule {}

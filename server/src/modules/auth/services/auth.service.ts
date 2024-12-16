@@ -16,6 +16,7 @@ import { RedisService } from '../../../redis/redis.service';
 import { ResetPasswordDto } from '../dto/password-reset.dto';
 import { MailerService } from '../../mail/mail.service';
 import { v4 as uuidv4 } from 'uuid';
+import { PasswordService } from './password.service';
 import { addMinutes, differenceInMinutes } from 'date-fns';
 import { PerformanceService } from '../../../common/monitoring/performance.service';
 import { LocationService } from './location.service';
@@ -32,6 +33,7 @@ export class AuthService {
     private mailerService: MailerService,
     private performanceService: PerformanceService,
     private locationService: LocationService,
+    private passwordService: PasswordService,
   ) {}
 
   /**
@@ -417,8 +419,6 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     return await this.performanceService.measureAsync('register', async () => {
       try {
-        this.logger.debug('Starting registration process');
-
         const existingUser = await this.checkIfUserExists({
           email: registerDto.email,
           username: registerDto.username,
@@ -435,6 +435,17 @@ export class AuthService {
             );
           }
         }
+        const passwordValidation = await this.passwordService.validatePassword(
+          registerDto.password
+        );
+
+        if (!passwordValidation.isValid) {
+          throw new BadRequestException({
+            message: 'Password validation failed',
+            errors: passwordValidation.errors,
+          });
+        }
+
         this.performanceService.incrementCounter('successful_registrations');
         const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
@@ -566,6 +577,17 @@ export class AuthService {
           );
           if (!userId) {
             throw new UnauthorizedException('Invalid or expired reset token');
+          }
+
+          const passwordValidation = await this.passwordService.validatePassword(
+            resetDto.password
+          );
+  
+          if (!passwordValidation.isValid) {
+            throw new BadRequestException({
+              message: 'Password validation failed',
+              errors: passwordValidation.errors,
+            });
           }
 
           await this.checkPasswordHistory(userId, resetDto.password);
