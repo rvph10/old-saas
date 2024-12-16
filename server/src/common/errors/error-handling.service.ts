@@ -1,5 +1,3 @@
-// server/src/common/errors/error-handling.service.ts
-
 import { Injectable, Logger } from '@nestjs/common';
 import { MetricsService } from '../monitoring/metrics.service';
 import { ConfigService } from '@nestjs/config';

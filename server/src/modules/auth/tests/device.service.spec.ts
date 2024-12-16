@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DeviceService } from '../services/device.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UAParser } from 'ua-parser-js';
+import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
+import { DatabaseError } from 'src/common/errors/custom-errors';
+import { ErrorCodes } from 'src/common/errors/error-codes';
 
 jest.mock('ua-parser-js');
 
@@ -30,6 +33,13 @@ describe('DeviceService', () => {
       'Mozilla/5.0 (iPad; CPU OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
   };
 
+  const mockErrorHandlingService = {
+    handleAuthenticationError: jest.fn(),
+    handleValidationError: jest.fn(),
+    handleDatabaseError: jest.fn(),
+    handleSessionError: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,6 +47,10 @@ describe('DeviceService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: ErrorHandlingService,
+          useValue: mockErrorHandlingService,
         },
       ],
     }).compile();
@@ -47,6 +61,10 @@ describe('DeviceService', () => {
     // Reset all mocks
     jest.clearAllMocks();
     (UAParser as jest.MockedClass<typeof UAParser>).mockClear();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   describe('getDeviceInfo', () => {
@@ -238,13 +256,18 @@ describe('DeviceService', () => {
     });
 
     it('should handle errors during device registration', async () => {
-      mockPrismaService.userDevice.upsert.mockRejectedValue(
-        new Error('Database error'),
-      );
+      const dbError = new Error('Database error');
+      mockPrismaService.userDevice.upsert.mockRejectedValue(dbError);
+      mockErrorHandlingService.handleDatabaseError.mockImplementation(() => {
+        throw new DatabaseError('Database operation failed', {
+          code: ErrorCodes.DATABASE.OPERATION_FAILED,
+          originalError: dbError,
+        });
+      });
 
       await expect(
         service.registerDevice(userId, mockUserAgents.desktop),
-      ).rejects.toThrow('Database error');
+      ).rejects.toThrow(DatabaseError);
     });
   });
 

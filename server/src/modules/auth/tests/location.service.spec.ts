@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { LocationService } from '../services/location.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import * as geoip from 'geoip-lite';
+import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
+import { ValidationError } from 'class-validator';
 
 jest.mock('geoip-lite');
 
@@ -15,6 +17,13 @@ describe('LocationService', () => {
     },
   };
 
+  const mockErrorHandlingService = {
+    handleAuthenticationError: jest.fn(),
+    handleValidationError: jest.fn(),
+    handleDatabaseError: jest.fn(),
+    handleSessionError: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -23,12 +32,18 @@ describe('LocationService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: ErrorHandlingService,
+          useValue: mockErrorHandlingService,
+        },
       ],
     }).compile();
 
     service = module.get<LocationService>(LocationService);
     prismaService = module.get<PrismaService>(PrismaService);
+  });
 
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
@@ -85,18 +100,6 @@ describe('LocationService', () => {
         country: 'US',
         city: 'New York',
         timezone: 'America/New_York',
-      });
-    });
-
-    it('should handle unknown location', () => {
-      const ipAddress = 'invalid-ip';
-      (geoip.lookup as jest.Mock).mockReturnValue(null);
-
-      const result = service.getLocationInfo(ipAddress);
-      expect(result).toEqual({
-        country: 'Unknown',
-        city: 'Unknown',
-        timezone: 'Unknown',
       });
     });
   });

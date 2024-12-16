@@ -57,6 +57,10 @@ describe('RateLimitMiddleware', () => {
     mockRedisService.set.mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('should allow requests within rate limit', async () => {
     mockRedisService.get.mockResolvedValue('1');
     mockRedisService.ttl.mockResolvedValue(300);

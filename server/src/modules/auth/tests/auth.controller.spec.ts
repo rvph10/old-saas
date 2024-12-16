@@ -84,6 +84,10 @@ describe('AuthController', () => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe('register', () => {
     const registerDto = {
       email: 'test@example.com',

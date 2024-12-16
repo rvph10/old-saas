@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TwoFactorService } from '../services/two-factor.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import * as speakeasy from 'speakeasy';
+import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
+import { TwoFactorError } from 'src/common/errors/custom-errors';
+import { ErrorCodes } from 'src/common/errors/error-codes';
 
 jest.mock('speakeasy');
 jest.mock('qrcode');
@@ -17,6 +20,13 @@ describe('TwoFactorService', () => {
     },
   };
 
+  const mockErrorHandlingService = {
+    handleAuthenticationError: jest.fn(),
+    handleValidationError: jest.fn(),
+    handleDatabaseError: jest.fn(),
+    handleSessionError: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -25,12 +35,18 @@ describe('TwoFactorService', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: ErrorHandlingService,
+          useValue: mockErrorHandlingService,
+        },
       ],
     }).compile();
 
     service = module.get<TwoFactorService>(TwoFactorService);
     prismaService = module.get<PrismaService>(PrismaService);
+  });
 
+  afterEach(() => {
     jest.clearAllMocks();
   });
 
@@ -81,9 +97,15 @@ describe('TwoFactorService', () => {
         twoFactorSecret: 'SECRET',
       });
       (speakeasy.totp.verify as jest.Mock).mockReturnValue(false);
+      mockErrorHandlingService.handleAuthenticationError.mockImplementation(
+        (error) => {
+          throw error;
+        },
+      );
 
-      const result = await service.verifyToken(userId, token);
-      expect(result).toBe(false);
+      await expect(service.verifyToken(userId, token)).rejects.toThrow(
+        TwoFactorError,
+      );
     });
 
     it('should return false if user has no 2FA secret', async () => {
@@ -91,8 +113,19 @@ describe('TwoFactorService', () => {
         twoFactorSecret: null,
       });
 
-      const result = await service.verifyToken(userId, token);
-      expect(result).toBe(false);
+      const error = new TwoFactorError(
+        '2FA not set up for this account',
+        { code: ErrorCodes.AUTH.TWO_FACTOR_REQUIRED },
+        'verifyToken',
+      );
+
+      mockErrorHandlingService.handleAuthenticationError.mockRejectedValue(
+        error,
+      );
+
+      await expect(service.verifyToken(userId, token)).rejects.toThrow(
+        TwoFactorError,
+      );
     });
   });
 
