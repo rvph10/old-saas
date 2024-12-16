@@ -14,6 +14,8 @@ import { MailerService } from '../../mail/mail.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { addMinutes, subMinutes } from 'date-fns';
 import { isEmail } from 'class-validator';
+import { LocationService } from '../services/location.service';
+import { TwoFactorService } from '../services/two-factor.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -38,6 +40,18 @@ describe('AuthService', () => {
       findMany: jest.fn(),
       create: jest.fn(),
     }
+  };
+
+  const mockTwoFactorService = {
+    generateSecret: jest.fn(),
+    verifyToken: jest.fn(),
+    enable2FA: jest.fn(),
+    disable2FA: jest.fn(),
+  };
+  
+  const mockLocationService = {
+    isNewLoginLocation: jest.fn(),
+    getLocationInfo: jest.fn(),
   };
 
   const mockJwtService = {
@@ -87,34 +101,14 @@ describe('AuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        {
-          provide: PrismaService,
-          useValue: mockPrismaService,
-        },
-        {
-          provide: JwtService,
-          useValue: mockJwtService,
-        },
-        {
-          provide: SessionService,
-          useValue: mockSessionService,
-        },
-        {
-          provide: RedisService,
-          useValue: mockRedisService,
-        },
-        {
-          provide: MailerService,
-          useValue: mockMailerService,
-        },
-        {
-          provide: PerformanceService,
-          useValue: mockPerformanceService,
-        },
-        {
-          provide: Logger,
-          useValue: mockLogger,
-        },
+        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: JwtService, useValue: mockJwtService },
+        { provide: SessionService, useValue: mockSessionService },
+        { provide: RedisService, useValue: mockRedisService },
+        { provide: MailerService, useValue: mockMailerService },
+        { provide: PerformanceService, useValue: mockPerformanceService },
+        { provide: TwoFactorService, useValue: mockTwoFactorService },
+        { provide: LocationService, useValue: mockLocationService },
       ],
     }).compile();
 

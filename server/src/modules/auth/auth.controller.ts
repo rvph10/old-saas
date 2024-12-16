@@ -25,6 +25,9 @@ import { SessionGuard } from './guard/session.guard';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { ResendVerificationDto, VerifyEmailDto } from './dto/verifiy-email.dto';
 import { DeviceService } from './services/device.service';
+import { Enable2FADto, Verify2FADto } from './dto/2fa.dto';
+import { TwoFactorService } from './services/two-factor.service';
+import { LocationService } from './services/location.service';
 
 @Controller('auth')
 export class AuthController {
@@ -33,6 +36,8 @@ export class AuthController {
     private sessionService: SessionService,
     private performanceService: PerformanceService,
     private deviceService: DeviceService,
+    private twoFactorService: TwoFactorService,
+    private locationService: LocationService,
   ) {}
 
   @Get('devices')
@@ -204,5 +209,51 @@ export class AuthController {
   async getCurrentUser(@Req() req: Request & { user: any }) {
     const { password, ...user } = req.user;
     return user;
+  }
+
+  @Post('2fa/setup')
+  @UseGuards(JwtAuthGuard)
+  async setup2FA(@Req() req: Request & { user: any }) {
+    return this.twoFactorService.generateSecret(req.user.id);
+  }
+
+  @Post('2fa/enable')
+  @UseGuards(JwtAuthGuard)
+  async enable2FA(
+    @Req() req: Request & { user: any },
+    @Body() body: Enable2FADto,
+  ) {
+    const isValid = await this.twoFactorService.verifyToken(
+      req.user.id,
+      body.token,
+    );
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid 2FA token');
+    }
+    await this.twoFactorService.enable2FA(req.user.id);
+    return { message: '2FA enabled successfully' };
+  }
+
+  @Post('2fa/verify')
+  @UseGuards(JwtAuthGuard)
+  async verify2FA(
+    @Req() req: Request & { user: any },
+    @Body() body: Verify2FADto,
+  ) {
+    const isValid = await this.twoFactorService.verifyToken(
+      req.user.id,
+      body.token,
+    );
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid 2FA token');
+    }
+    return { message: '2FA verification successful' };
+  }
+
+  @Post('2fa/disable')
+  @UseGuards(JwtAuthGuard)
+  async disable2FA(@Req() req: Request & { user: any }) {
+    await this.twoFactorService.disable2FA(req.user.id);
+    return { message: '2FA disabled successfully' };
   }
 }

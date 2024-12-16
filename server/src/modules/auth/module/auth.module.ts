@@ -11,6 +11,8 @@ import { MailModule } from '../../mail/mail.module';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { DeviceService } from '../services/device.service';
 import { DeviceModule } from './device.module';
+import { TwoFactorService } from '../services/two-factor.service';
+import { LocationService } from '../services/location.service';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { DeviceModule } from './device.module';
     SessionService,
     PerformanceService,
     DeviceService,
+    LocationService,
+    TwoFactorService,
   ],
   exports: [AuthService, SessionService, DeviceService],
 })

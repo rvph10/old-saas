@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from 'src/redis/redis.service';
+import { convert } from 'html-to-text';
 
 export interface MailOptions {
   to: string;
@@ -31,7 +32,6 @@ export class MailerService {
     try {
       if (this.configService.get('NODE_ENV') === 'development') {
         this.logger.debug('Initializing Ethereal Email transport');
-
         const etherealAccount = await this.getOrCreateEtherealAccount();
 
         if (etherealAccount) {
@@ -48,10 +48,9 @@ export class MailerService {
           throw new Error('Failed to initialize Ethereal account');
         }
       } else {
-        // Production settings remain the same
         this.transporter = nodemailer.createTransport({
           host: this.configService.get('SMTP_HOST'),
-          port: this.configService.get('SMTP_PORT'),
+          port: parseInt(this.configService.get('SMTP_PORT')),
           secure: this.configService.get('SMTP_SECURE') === 'true',
           auth: {
             user: this.configService.get('SMTP_USER'),
@@ -60,13 +59,41 @@ export class MailerService {
         });
       }
 
-      // Verify the connection
       await this.transporter.verify();
       this.logger.log('Mail transporter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize mail transporter:', error);
       throw error;
     }
+  }
+
+  async sendLoginAlert(email: string, data: {
+    ip: string;
+    browser: string;
+    location: {
+      country: string;
+      city: string;
+      timezone: string;
+    };
+    time: Date;
+  }) {
+    const html = `
+      <h2>New Login Detected</h2>
+      <p>We detected a new login to your account from an unrecognized device:</p>
+      <ul>
+        <li>Time: ${data.time.toLocaleString()}</li>
+        <li>Location: ${data.location.city}, ${data.location.country}</li>
+        <li>IP Address: ${data.ip}</li>
+        <li>Browser: ${data.browser}</li>
+      </ul>
+      <p>If this wasn't you, please change your password immediately and enable 2FA if you haven't already.</p>
+    `;
+
+    await this.transporter.sendMail({
+      to: email,
+      subject: 'New Login Alert',
+      html,
+    });
   }
 
   private async getOrCreateEtherealAccount(): Promise<any> {
@@ -148,13 +175,12 @@ export class MailerService {
 
       if (this.configService.get('NODE_ENV') === 'development') {
         const previewUrl = nodemailer.getTestMessageUrl(info);
-        console.log('=============== EMAIL SENT ===============');
-        console.log('Preview URL:', previewUrl);
-        console.log('MessageId:', info.messageId);
-        console.log('To:', options.to);
-        console.log('Subject:', options.subject);
-        console.log('=======================================');
-        this.logger.debug(`Email Preview URL: ${previewUrl}`);
+        this.logger.debug('=============== EMAIL SENT ===============');
+        this.logger.debug(`Preview URL: ${previewUrl}`);
+        this.logger.debug(`MessageId: ${info.messageId}`);
+        this.logger.debug(`To: ${options.to}`);
+        this.logger.debug(`Subject: ${options.subject}`);
+        this.logger.debug('=======================================');
       }
 
       this.logger.log(`Email sent: ${info.messageId}`);

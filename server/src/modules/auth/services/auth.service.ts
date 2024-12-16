@@ -18,6 +18,7 @@ import { MailerService } from '../../mail/mail.service';
 import { v4 as uuidv4 } from 'uuid';
 import { addMinutes, differenceInMinutes } from 'date-fns';
 import { PerformanceService } from '../../../common/monitoring/performance.service';
+import { LocationService } from './location.service';
 
 @Injectable()
 export class AuthService {
@@ -30,6 +31,7 @@ export class AuthService {
     private redisService: RedisService,
     private mailerService: MailerService,
     private performanceService: PerformanceService,
+    private locationService: LocationService,
   ) {}
 
   /**
@@ -200,6 +202,29 @@ export class AuthService {
         if (!isPasswordValid) {
           await this.handleFailedLogin(user);
           throw new UnauthorizedException('Invalid credentials, please try again');
+        }else {
+          const isNewLocation = await this.locationService.isNewLoginLocation(
+            user.id,
+            data.ipAddress,
+          );
+  
+          if (isNewLocation) {
+            const locationInfo = this.locationService.getLocationInfo(data.ipAddress);
+            await this.mailerService.sendLoginAlert(user.email, {
+              ip: data.ipAddress,
+              browser: data.userAgent,
+              location: locationInfo,
+              time: new Date(),
+            });
+          }
+  
+          // If 2FA is enabled, return a different response
+          if (user.twoFactorEnabled) {
+            return {
+              requires2FA: true,
+              tempToken: this.generateTempToken(user),
+            };
+          }
         }
 
         // Reset failed attempts on successful login
@@ -236,6 +261,15 @@ export class AuthService {
         throw error;
       }
     });
+  }
+
+  private generateTempToken(user: any) {
+    const payload = {
+      sub: user.id,
+      type: '2fa-pending',
+      exp: Math.floor(Date.now() / 1000) + (5 * 60),
+    };
+    return this.jwtService.sign(payload);
   }
 
   async checkPasswordHistory(

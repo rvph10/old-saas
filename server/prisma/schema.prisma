@@ -41,6 +41,10 @@ model User {
   passwordResetToken   String?   @unique
   passwordResetExpires DateTime?
 
+  // 2FA
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean   @default(false)
+
   // Failed login attempts tracking
   failedLoginAttempts    Int       @default(0)
   lastFailedLoginAttempt DateTime?
