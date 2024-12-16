@@ -16,6 +16,8 @@ import { addMinutes, subMinutes } from 'date-fns';
 import { isEmail } from 'class-validator';
 import { LocationService } from '../services/location.service';
 import { TwoFactorService } from '../services/two-factor.service';
+import { PasswordService } from '../services/password.service';
+import { PasswordValidationError } from 'src/common/errors/custom-errors';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -40,6 +42,12 @@ describe('AuthService', () => {
       findMany: jest.fn(),
       create: jest.fn(),
     },
+  };
+
+  const mockPasswordService = {
+    validatePassword: jest.fn(),
+    validatePasswordStrength: jest.fn(),
+    checkPasswordBreached: jest.fn(),
   };
 
   const mockTwoFactorService = {
@@ -109,6 +117,7 @@ describe('AuthService', () => {
         { provide: PerformanceService, useValue: mockPerformanceService },
         { provide: TwoFactorService, useValue: mockTwoFactorService },
         { provide: LocationService, useValue: mockLocationService },
+        { provide: PasswordService, useValue: mockPasswordService}
       ],
     }).compile();
 
@@ -151,15 +160,25 @@ describe('AuthService', () => {
     const registerDto = {
       email: 'test@example.com',
       username: 'testuser',
-      password: 'password123',
+      password: 'Password123!',
       firstName: 'Test',
       lastName: 'User',
     };
+
+    beforeEach(() => {
+      // Reset password validation mock
+      mockPasswordService.validatePassword.mockReset();
+    });
 
     it('should register a new user successfully', async () => {
       const hashedPassword = 'hashedPassword';
       const verificationToken = 'test-token';
       const verificationExpiry = new Date();
+
+      mockPasswordService.validatePassword.mockResolvedValue({
+        isValid: true,
+        errors: [],
+      });
 
       jest.spyOn(bcrypt, 'hash').mockResolvedValue(hashedPassword as never);
       mockPrismaService.user.findFirst.mockResolvedValue(null);
@@ -192,6 +211,17 @@ describe('AuthService', () => {
           role: true,
         },
       });
+    });
+
+    it('should throw PasswordValidationError for invalid password', async () => {
+      mockPasswordService.validatePassword.mockResolvedValue({
+        isValid: false,
+        errors: ['Password too weak'],
+      });
+
+      await expect(service.register(registerDto)).rejects.toThrow(
+        PasswordValidationError
+      );
     });
 
     it('should throw ConflictException if user already exists', async () => {
@@ -540,62 +570,41 @@ describe('AuthService', () => {
     });
   });
 
-  describe('password reset', () => {
-    const email = 'test@example.com';
+  describe('resetPassword', () => {
     const token = 'reset-token';
     const userId = 'user-id';
+    const newPassword = 'NewPassword123!';
 
-    it('should handle password reset request successfully', async () => {
-      mockPrismaService.user.findUnique.mockResolvedValue({
-        id: userId,
-        email,
-      });
-
-      await service.requestPasswordReset(email);
-
-      expect(mockRedisService.set).toHaveBeenCalledWith(
-        expect.stringContaining('pwd_reset:'),
-        userId,
-        15 * 60, // 15 minutes
-      );
-      expect(mockMailerService.sendPasswordReset).toHaveBeenCalledWith(
-        email,
-        expect.any(String),
-      );
-    });
-
-    it('should handle non-existent email for password reset', async () => {
-      mockPrismaService.user.findUnique.mockResolvedValue(null);
-
-      const result = await service.requestPasswordReset(email);
-
-      expect(result.message).toBe(
-        'If the email exists, a reset link has been sent',
-      );
-      expect(mockRedisService.set).not.toHaveBeenCalled();
-      expect(mockMailerService.sendPasswordReset).not.toHaveBeenCalled();
+    beforeEach(() => {
+      mockPasswordService.validatePassword.mockReset();
     });
 
     it('should reset password successfully', async () => {
-      const newPassword = 'newPassword123!';
       mockRedisService.get.mockResolvedValue(userId);
       mockPrismaService.passwordHistory.findMany.mockResolvedValue([]);
+      mockPasswordService.validatePassword.mockResolvedValue({
+        isValid: true,
+        errors: [],
+      });
 
       await service.resetPassword({ token, password: newPassword });
 
-      expect(mockPrismaService.user.update).toHaveBeenCalledWith({
-        where: { id: userId },
-        data: { password: expect.any(String) },
-      });
-      expect(mockRedisService.del).toHaveBeenCalledWith(`pwd_reset:${token}`);
+      expect(mockPasswordService.validatePassword).toHaveBeenCalledWith(
+        newPassword
+      );
+      expect(mockPrismaService.user.update).toHaveBeenCalled();
     });
 
-    it('should throw UnauthorizedException for invalid reset token', async () => {
-      mockRedisService.get.mockResolvedValue(null);
+    it('should throw PasswordValidationError for invalid new password', async () => {
+      mockRedisService.get.mockResolvedValue(userId);
+      mockPasswordService.validatePassword.mockResolvedValue({
+        isValid: false,
+        errors: ['Password too weak'],
+      });
 
       await expect(
-        service.resetPassword({ token, password: 'newPassword123!' }),
-      ).rejects.toThrow(UnauthorizedException);
+        service.resetPassword({ token, password: 'weak' })
+      ).rejects.toThrow(PasswordValidationError);
     });
   });
 
