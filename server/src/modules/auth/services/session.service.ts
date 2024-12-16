@@ -8,6 +8,9 @@ import { RedisService } from 'src/redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
 import { DeviceService } from './device.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
+import { AppError, SessionError } from 'src/common/errors/custom-errors';
+import { ErrorCodes } from 'src/common/errors/error-codes';
+import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 
 interface SessionOptions {
   maxSessions?: number;
@@ -34,6 +37,7 @@ export class SessionService {
   constructor(
     private readonly redisService: RedisService,
     private readonly deviceService: DeviceService,
+    private readonly errorHandlingService: ErrorHandlingService,
     private readonly performanceService: PerformanceService,
   ) {}
 
@@ -48,16 +52,19 @@ export class SessionService {
 
       if (currentSessions.length >= maxSessions) {
         if (options.forceLogoutOthers) {
-          this.logger.log(
-            `Force logging out other sessions for user ${userId}`,
-          );
           await Promise.all(
             currentSessions.map((sid) => this.destroySession(sid)),
           );
         } else {
           this.logger.warn(`Session limit reached for user ${userId}`);
-          throw new BadRequestException(
-            `Maximum sessions limit (${maxSessions}) reached. Please logout from another device or use force logout option.`,
+          throw new SessionError(
+            `Maximum sessions limit (${maxSessions}) reached`,
+            {
+              code: ErrorCodes.AUTH.SESSION_LIMIT_EXCEEDED,
+              currentSessions: currentSessions.length,
+              maxSessions,
+            },
+            'createSession',
           );
         }
       }
@@ -93,11 +100,10 @@ export class SessionService {
 
       return sessionId;
     } catch (error) {
-      this.logger.error(
-        `Failed to create session for user ${userId}:`,
-        error.stack,
-      );
-      throw error;
+      if (error instanceof AppError) {
+        throw error;
+      }
+      this.errorHandlingService.handleSessionError(error, 'createSession');
     }
   }
 
@@ -225,8 +231,32 @@ export class SessionService {
   }
 
   async validateSession(sessionId: string, userId: string): Promise<boolean> {
-    const session = await this.getSession(sessionId);
-    return session?.userId === userId;
+    try {
+      const session = await this.getSession(sessionId);
+
+      if (!session) {
+        throw new SessionError(
+          'Invalid session',
+          { code: ErrorCodes.AUTH.SESSION_EXPIRED },
+          'validateSession',
+        );
+      }
+
+      if (session.userId !== userId) {
+        throw new SessionError(
+          'Session mismatch',
+          { code: ErrorCodes.AUTH.INVALID_TOKEN },
+          'validateSession',
+        );
+      }
+
+      return true;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      this.errorHandlingService.handleSessionError(error, 'validateSession');
+    }
   }
 
   async getUserSessions(userId: string): Promise<string[]> {

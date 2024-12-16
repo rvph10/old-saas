@@ -1,43 +1,68 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import fetch from 'node-fetch';
+import { AppError, ValidationError } from 'src/common/errors/custom-errors';
+import { ErrorCodes } from 'src/common/errors/error-codes';
+import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 
 @Injectable()
 export class PasswordService {
   private readonly logger = new Logger(PasswordService.name);
+  constructor(private readonly errorHandlingService: ErrorHandlingService) {}
 
   validatePasswordStrength(password: string): {
     isValid: boolean;
     errors: string[];
   } {
-    const errors: string[] = [];
+    try {
+      const errors: string[] = [];
 
-    if (password.length < 8) {
-      errors.push('Password must be at least 8 characters long');
-    }
+      if (password.length < 8) {
+        errors.push('Password must be at least 8 characters long');
+      }
 
-    if (!/[A-Z]/.test(password)) {
-      errors.push('Password must contain at least one uppercase letter');
-    }
+      if (!/[A-Z]/.test(password)) {
+        errors.push('Password must contain at least one uppercase letter');
+      }
 
-    if (!/[a-z]/.test(password)) {
-      errors.push('Password must contain at least one lowercase letter');
-    }
+      if (!/[a-z]/.test(password)) {
+        errors.push('Password must contain at least one lowercase letter');
+      }
 
-    if (!/\d/.test(password)) {
-      errors.push('Password must contain at least one number');
-    }
+      if (!/\d/.test(password)) {
+        errors.push('Password must contain at least one number');
+      }
 
-    if (!/[@$!%*?&]/.test(password)) {
-      errors.push(
-        'Password must contain at least one special character (@$!%*?&)',
+      if (!/[@$!%*?&]/.test(password)) {
+        errors.push(
+          'Password must contain at least one special character (@$!%*?&)',
+        );
+      }
+
+      if (errors.length > 0) {
+        throw new ValidationError(
+          'Password validation failed',
+          {
+            code: ErrorCodes.VALIDATION.INVALID_PASSWORD,
+            errors,
+          },
+          'validatePasswordStrength',
+        );
+      }
+
+      return {
+        isValid: true,
+        errors: [],
+      };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      this.errorHandlingService.handleValidationError(
+        error,
+        'validatePasswordStrength',
       );
     }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    };
   }
 
   async checkPasswordBreached(password: string): Promise<{
@@ -56,10 +81,14 @@ export class PasswordService {
       const response = await fetch(
         `https://api.pwnedpasswords.com/range/${prefix}`,
       );
-      const text = await response.text();
 
-      // Search for the suffix in the response
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.statusText}`);
+      }
+
+      const text = await response.text();
       const lines = text.split('\n');
+
       for (const line of lines) {
         const [hash, count] = line.split(':');
         if (hash === suffix) {
@@ -73,7 +102,6 @@ export class PasswordService {
       return { isBreached: false };
     } catch (error) {
       this.logger.error('Password breach check failed:', error);
-      // Return false in case of API failure to not block registration
       return { isBreached: false };
     }
   }
@@ -82,21 +110,33 @@ export class PasswordService {
     isValid: boolean;
     errors: string[];
   }> {
-    const strengthCheck = this.validatePasswordStrength(password);
-    if (!strengthCheck.isValid) {
-      return strengthCheck;
-    }
+    try {
+      const strengthCheck = this.validatePasswordStrength(password);
+      if (!strengthCheck.isValid) {
+        return strengthCheck;
+      }
 
-    const breachCheck = await this.checkPasswordBreached(password);
-    if (breachCheck.isBreached) {
-      return {
-        isValid: false,
-        errors: [
-          `This password has been found in ${breachCheck.occurrences} data breaches. Please choose a different password.`,
-        ],
-      };
-    }
+      const breachCheck = await this.checkPasswordBreached(password);
+      if (breachCheck.isBreached) {
+        throw new ValidationError(
+          'Password found in data breach',
+          {
+            code: ErrorCodes.VALIDATION.PASSWORD_HISTORY,
+            occurrences: breachCheck.occurrences,
+          },
+          'validatePassword',
+        );
+      }
 
-    return { isValid: true, errors: [] };
+      return { isValid: true, errors: [] };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      this.errorHandlingService.handleValidationError(
+        error,
+        'validatePassword',
+      );
+    }
   }
 }

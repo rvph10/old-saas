@@ -24,6 +24,8 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { MonitoringModule } from './common/monitoring/monitoring.module';
 import { MetricsService } from './common/monitoring/metrics.service';
 import { HealthModule } from './health/health.module';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { ErrorModule } from './common/errors/error.module';
 
 @Module({
   imports: [
@@ -45,6 +47,7 @@ import { HealthModule } from './health/health.module';
     MonitoringModule,
     AuthModule,
     HealthModule,
+    ErrorModule,
   ],
   controllers: [HealthController],
   providers: [
@@ -53,7 +56,7 @@ import { HealthModule } from './health/health.module';
     MetricsService,
     {
       provide: APP_INTERCEPTOR,
-      useClass: MonitoringInterceptor,
+      useClass: GlobalExceptionFilter,
     },
   ],
 })

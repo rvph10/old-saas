@@ -20,7 +20,16 @@ import { PasswordService } from './password.service';
 import { addMinutes, differenceInMinutes } from 'date-fns';
 import { PerformanceService } from '../../../common/monitoring/performance.service';
 import { LocationService } from './location.service';
-import { PasswordValidationError } from 'src/common/errors/custom-errors';
+import {
+  AccountError,
+  AppError,
+  AuthenticationError,
+  AuthorizationError,
+  PasswordValidationError,
+  ValidationError,
+} from 'src/common/errors/custom-errors';
+import { ErrorCodes } from 'src/common/errors/error-codes';
+import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 
 export interface SessionOptions {
   maxSessions?: number;
@@ -47,6 +56,7 @@ export class AuthService {
     private performanceService: PerformanceService,
     private locationService: LocationService,
     private passwordService: PasswordService,
+    private errorHandlingService: ErrorHandlingService,
   ) {}
 
   /**
@@ -181,21 +191,44 @@ export class AuthService {
 
         if (!user) {
           this.performanceService.incrementCounter('failed_logins');
-          throw new UnauthorizedException(
-            'Account not found with these credentials',
+          throw new AuthenticationError(
+            'Invalid credentials',
+            { code: ErrorCodes.AUTH.INVALID_CREDENTIALS },
+            'login',
           );
         }
 
         if (user.deletedAt) {
           this.performanceService.incrementCounter('failed_logins');
-          throw new UnauthorizedException(
-            'This account has been deactivated. Please contact support for assistance',
+          throw new AuthenticationError(
+            'Email verification required. Please check your email.',
+            { code: ErrorCodes.AUTH.EMAIL_NOT_VERIFIED },
+            'login',
           );
         }
 
+        if (user.accountLocked && user.lockExpires) {
+          if (user.lockExpires > new Date()) {
+            const remainingMinutes = differenceInMinutes(
+              user.lockExpires,
+              new Date(),
+            );
+            throw new AccountError(
+              `Account temporarily locked. Try again in ${remainingMinutes} minutes`,
+              {
+                code: ErrorCodes.AUTH.ACCOUNT_LOCKED,
+                remainingMinutes,
+              },
+              'login',
+            );
+          }
+        }
+
         if (!user.isEmailVerified) {
-          throw new UnauthorizedException(
-            'Email verification required. Please check your email for verification instructions',
+          throw new AuthenticationError(
+            'Email verification required. Please check your email.',
+            { code: ErrorCodes.AUTH.EMAIL_NOT_VERIFIED },
+            'login',
           );
         }
 
@@ -221,8 +254,10 @@ export class AuthService {
 
         if (!isPasswordValid) {
           await this.handleFailedLogin(user);
-          throw new UnauthorizedException(
-            'Invalid credentials, please try again',
+          throw new AuthenticationError(
+            'Invalid credentials',
+            { code: ErrorCodes.AUTH.INVALID_CREDENTIALS },
+            'login',
           );
         } else {
           const isNewLocation = await this.locationService.isNewLoginLocation(
@@ -284,8 +319,10 @@ export class AuthService {
         const token = this.generateToken(user);
         return { ...token, sessionId };
       } catch (error) {
-        this.logger.error('Login failed', error.stack);
-        throw error;
+        if (error instanceof AppError) {
+          throw error;
+        }
+        this.errorHandlingService.handleAuthenticationError(error, 'login');
       }
     });
   }
@@ -311,9 +348,9 @@ export class AuthService {
 
     for (const historical of recentPasswords) {
       if (await bcrypt.compare(newPassword, historical.password)) {
-        throw new BadRequestException(
-          'Password must be different from recent passwords, please choose a new one',
-        );
+        throw new PasswordValidationError([
+          'Password cannot be the same as any of the last 5 passwords',
+        ]);
       }
     }
 
@@ -402,7 +439,7 @@ export class AuthService {
     });
 
     if (attempts >= MAX_ATTEMPTS) {
-      throw new UnauthorizedException(
+      throw new AuthorizationError(
         `Account locked for ${LOCK_TIME} minutes due to too many failed attempts`,
       );
     }
@@ -444,11 +481,17 @@ export class AuthService {
         if (existingUser) {
           this.performanceService.incrementCounter('duplicate_registrations');
           if (existingUser.email === registerDto.email) {
-            throw new ConflictException('Email already in use');
+            throw new ValidationError(
+              'Email already in use',
+              { code: ErrorCodes.ACCOUNT.ALREADY_EXISTS },
+              'register',
+            );
           }
           if (existingUser.username === registerDto.username) {
-            throw new ConflictException(
-              'Username already in use, please choose another',
+            throw new ValidationError(
+              'Username already taken',
+              { code: ErrorCodes.ACCOUNT.ALREADY_EXISTS },
+              'register',
             );
           }
         }
@@ -457,7 +500,14 @@ export class AuthService {
         );
 
         if (!passwordValidation.isValid) {
-          throw new PasswordValidationError(passwordValidation.errors);
+          throw new ValidationError(
+            'Password validation failed',
+            {
+              code: ErrorCodes.VALIDATION.INVALID_PASSWORD,
+              errors: passwordValidation.errors,
+            },
+            'register',
+          );
         }
 
         this.performanceService.incrementCounter('successful_registrations');
@@ -485,8 +535,10 @@ export class AuthService {
         await this.mailerService.sendWelcome(user.email, user.username);
         return this.generateToken(user);
       } catch (error) {
-        this.logger.error('Registration error', error.stack);
-        throw error;
+        if (error instanceof AppError) {
+          throw error;
+        }
+        this.errorHandlingService.handleValidationError(error, 'register');
       }
     });
   }

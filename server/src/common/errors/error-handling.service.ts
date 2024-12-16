@@ -1,52 +1,115 @@
+// server/src/common/errors/error-handling.service.ts
+
 import { Injectable, Logger } from '@nestjs/common';
+import { MetricsService } from '../monitoring/metrics.service';
+import { ConfigService } from '@nestjs/config';
+import {
+  AppError,
+  DatabaseError,
+  SessionError,
+  ValidationError,
+} from './custom-errors';
+import { ErrorCodes } from './error-codes';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-import * as ErrorCodes from './error-codes';
-import { DatabaseError, ValidationError } from './custom-errors';
 
 @Injectable()
 export class ErrorHandlingService {
   private readonly logger = new Logger(ErrorHandlingService.name);
+  private readonly isDevelopment: boolean;
+
+  constructor(
+    private configService: ConfigService,
+    private metricsService: MetricsService,
+  ) {
+    this.isDevelopment = configService.get('NODE_ENV') === 'development';
+  }
 
   handleDatabaseError(error: Error, context: string): never {
-    this.logger.error(`Database error in ${context}:`, error.stack);
+    this.logError(error, context);
+    this.metricsService.incrementCounter('database_errors');
 
     if (error instanceof PrismaClientKnownRequestError) {
       switch (error.code) {
-        case ErrorCodes.DATABASE_ERRORS.UNIQUE_CONSTRAINT:
+        case 'P2002':
           throw new DatabaseError('Unique constraint violation', {
+            code: ErrorCodes.DATABASE.UNIQUE_CONSTRAINT,
             fields: error.meta?.target,
+            context,
           });
-        case ErrorCodes.DATABASE_ERRORS.RECORD_NOT_FOUND:
-          throw new DatabaseError('Record not found');
-        case ErrorCodes.DATABASE_ERRORS.INVALID_DATA:
-          throw new DatabaseError('Invalid data provided');
+        case 'P2025':
+          throw new DatabaseError('Record not found', {
+            code: ErrorCodes.DATABASE.RECORD_NOT_FOUND,
+            context,
+          });
+        case 'P2014':
+          throw new DatabaseError('Invalid data provided', {
+            code: ErrorCodes.DATABASE.INVALID_DATA,
+            context,
+          });
         default:
-          throw new DatabaseError('Database operation failed');
+          throw new DatabaseError('Database operation failed', {
+            code: ErrorCodes.DATABASE.OPERATION_FAILED,
+            context,
+          });
       }
     }
 
-    throw new DatabaseError('Unexpected database error');
+    throw new DatabaseError('Unexpected database error', {
+      code: ErrorCodes.DATABASE.UNKNOWN_ERROR,
+      context,
+    });
   }
 
   handleValidationError(error: Error, context: string): never {
-    this.logger.error(`Validation error in ${context}:`, error.stack);
-    throw new ValidationError(error.message, {
-      code: ErrorCodes.VALIDATION_ERRORS.INVALID_INPUT,
+    this.logError(error, context);
+    this.metricsService.incrementCounter('validation_errors');
+
+    throw new ValidationError('Validation failed', {
+      code: ErrorCodes.VALIDATION.INVALID_INPUT,
+      details: this.formatErrorDetails(error),
+      context,
     });
   }
 
-  handleAuthError(error: Error, context: string): never {
-    this.logger.error(`Authentication error in ${context}:`, error.stack);
-    throw new ValidationError(error.message, {
-      code: ErrorCodes.AUTH_ERRORS.INVALID_CREDENTIALS,
+  handleSessionError(error: Error, context: string): never {
+    this.logError(error, context);
+    this.metricsService.incrementCounter('session_errors');
+
+    throw new SessionError('Session error occurred', {
+      code: ErrorCodes.AUTH.SESSION_EXPIRED,
+      details: this.formatErrorDetails(error),
+      context,
     });
   }
 
-  logError(error: Error, context: string): void {
-    this.logger.error(`Error in ${context}:`, error.stack, {
+  handleAuthenticationError(error: Error, context: string): never {
+    this.logError(error, context);
+    this.metricsService.incrementCounter('authentication_errors');
+
+    throw new AppError('Authentication failed', 'AUTH_ERROR', 401, {
+      code: ErrorCodes.AUTH.INVALID_CREDENTIALS,
+      details: this.formatErrorDetails(error),
+      context,
+    });
+  }
+
+  private formatErrorDetails(error: Error): any {
+    if (!this.isDevelopment) {
+      return undefined;
+    }
+
+    return {
       name: error.name,
       message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  private logError(error: Error, context: string): void {
+    this.logger.error(`Error in ${context}: ${error.message}`, error.stack, {
+      errorName: error.name,
       timestamp: new Date().toISOString(),
+      context,
     });
   }
 }

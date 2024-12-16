@@ -1,8 +1,11 @@
+// server/src/main.ts
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { CustomLoggerService } from './common/monitoring/logger.service';
+import { MetricsService } from './common/monitoring/metrics.service';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -10,12 +13,14 @@ async function bootstrap() {
     logger: new CustomLoggerService(),
   });
 
+  const metricsService = app.get(MetricsService);
+
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
     credentials: true,
   });
 
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  app.useGlobalFilters(new GlobalExceptionFilter(metricsService));
   app.useLogger(new CustomLoggerService());
 
   app.useGlobalPipes(

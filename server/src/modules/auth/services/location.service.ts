@@ -1,37 +1,84 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import * as geoip from 'geoip-lite';
+import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
+import { AppError, ValidationError } from 'src/common/errors/custom-errors';
+import { ErrorCodes } from 'src/common/errors/error-codes';
 
 @Injectable()
 export class LocationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private errorHandlingService: ErrorHandlingService,
+  ) {}
 
   async isNewLoginLocation(
     userId: string,
     ipAddress: string,
   ): Promise<boolean> {
-    const geo = geoip.lookup(ipAddress);
-    if (!geo) return true;
+    try {
+      if (!ipAddress) {
+        throw new ValidationError(
+          'IP address is required',
+          { code: ErrorCodes.VALIDATION.INVALID_INPUT },
+          'isNewLoginLocation',
+        );
+      }
 
-    const recentLogin = await this.prisma.loginHistory.findFirst({
-      where: {
-        userId,
-        ipAddress,
-        createdAt: {
-          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+      const geo = geoip.lookup(ipAddress);
+      if (!geo) return true;
+
+      const recentLogin = await this.prisma.loginHistory.findFirst({
+        where: {
+          userId,
+          ipAddress,
+          createdAt: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          },
         },
-      },
-    });
+      });
 
-    return !recentLogin;
+      return !recentLogin;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      this.errorHandlingService.handleValidationError(
+        error,
+        'isNewLoginLocation',
+      );
+    }
   }
 
   getLocationInfo(ipAddress: string) {
-    const geo = geoip.lookup(ipAddress);
-    return {
-      country: geo?.country || 'Unknown',
-      city: geo?.city || 'Unknown',
-      timezone: geo?.timezone || 'Unknown',
-    };
+    try {
+      if (!ipAddress) {
+        throw new ValidationError(
+          'IP address is required',
+          { code: ErrorCodes.VALIDATION.INVALID_INPUT },
+          'getLocationInfo',
+        );
+      }
+
+      const geo = geoip.lookup(ipAddress);
+      if (!geo) {
+        return {
+          country: 'Unknown',
+          city: 'Unknown',
+          timezone: 'Unknown',
+        };
+      }
+
+      return {
+        country: geo.country || 'Unknown',
+        city: geo.city || 'Unknown',
+        timezone: geo.timezone || 'Unknown',
+      };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      this.errorHandlingService.handleValidationError(error, 'getLocationInfo');
+    }
   }
 }

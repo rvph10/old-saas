@@ -2,10 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
+import { AppError, TwoFactorError } from '../../../common/errors/custom-errors';
+import { ErrorCodes } from '../../../common/errors/error-codes';
+import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 
 @Injectable()
 export class TwoFactorService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private errorHandlingService: ErrorHandlingService,
+  ) {}
 
   async generateSecret(userId: string) {
     const secret = speakeasy.generateSecret({
@@ -28,21 +34,42 @@ export class TwoFactorService {
   }
 
   async verifyToken(userId: string, token: string): Promise<boolean> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { twoFactorSecret: true },
-    });
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { twoFactorSecret: true },
+      });
 
-    if (!user?.twoFactorSecret) {
-      return false;
+      if (!user?.twoFactorSecret) {
+        throw new TwoFactorError(
+          '2FA not set up for this account',
+          { code: ErrorCodes.AUTH.TWO_FACTOR_REQUIRED },
+          'verifyToken',
+        );
+      }
+
+      const isValid = speakeasy.totp.verify({
+        secret: user.twoFactorSecret,
+        encoding: 'base32',
+        token: token,
+        window: 1,
+      });
+
+      if (!isValid) {
+        throw new TwoFactorError(
+          'Invalid 2FA token',
+          { code: ErrorCodes.AUTH.INVALID_2FA_TOKEN },
+          'verifyToken',
+        );
+      }
+
+      return true;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      this.errorHandlingService.handleAuthenticationError(error, 'verifyToken');
     }
-
-    return speakeasy.totp.verify({
-      secret: user.twoFactorSecret,
-      encoding: 'base32',
-      token: token,
-      window: 1, // Allow 30 seconds window
-    });
   }
 
   async enable2FA(userId: string): Promise<void> {
