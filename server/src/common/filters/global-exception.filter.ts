@@ -31,7 +31,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const response = exception.getResponse();
-      
+
       if (typeof response === 'object') {
         message = (response as any).message || exception.message;
         details = (response as any).errors || null;
@@ -58,7 +58,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       method: request.method,
       message,
       code,
-      details
+      details,
     });
   }
 }

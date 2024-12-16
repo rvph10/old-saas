@@ -40,7 +40,7 @@ import { PasswordService } from '../services/password.service';
     DeviceService,
     LocationService,
     TwoFactorService,
-    PasswordService
+    PasswordService,
   ],
   exports: [AuthService, SessionService, DeviceService, PasswordService],
 })

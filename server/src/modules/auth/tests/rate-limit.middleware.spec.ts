@@ -50,7 +50,7 @@ describe('RateLimitMiddleware', () => {
 
     // Reset all mocks
     jest.clearAllMocks();
-    
+
     // Set default mock implementations
     mockRedisService.ttl.mockResolvedValue(300); // 5 minutes in seconds
     mockRedisService.get.mockResolvedValue(null);
@@ -64,9 +64,18 @@ describe('RateLimitMiddleware', () => {
     await middleware.use(mockRequest as any, mockResponse as any, mockNext);
 
     expect(mockNext).toHaveBeenCalled();
-    expect(mockResponse.setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', expect.any(Number));
-    expect(mockResponse.setHeader).toHaveBeenCalledWith('X-RateLimit-Remaining', expect.any(Number));
-    expect(mockResponse.setHeader).toHaveBeenCalledWith('X-RateLimit-Reset', expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/));
+    expect(mockResponse.setHeader).toHaveBeenCalledWith(
+      'X-RateLimit-Limit',
+      expect.any(Number),
+    );
+    expect(mockResponse.setHeader).toHaveBeenCalledWith(
+      'X-RateLimit-Remaining',
+      expect.any(Number),
+    );
+    expect(mockResponse.setHeader).toHaveBeenCalledWith(
+      'X-RateLimit-Reset',
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/),
+    );
   });
 
   it('should block requests exceeding rate limit', async () => {
@@ -74,9 +83,9 @@ describe('RateLimitMiddleware', () => {
     mockRedisService.ttl.mockResolvedValue(300);
 
     await expect(
-      middleware.use(mockRequest as any, mockResponse as any, mockNext)
+      middleware.use(mockRequest as any, mockResponse as any, mockNext),
     ).rejects.toThrow(HttpException);
-    
+
     expect(mockNext).not.toHaveBeenCalled();
   });
 
@@ -85,19 +94,27 @@ describe('RateLimitMiddleware', () => {
       ...mockRequest,
       user: { id: 'user123' },
     };
-  
+
     // Mock for IP check and user check
     mockRedisService.get
-      .mockResolvedValueOnce('1')  // First call for IP-based check
+      .mockResolvedValueOnce('1') // First call for IP-based check
       .mockResolvedValueOnce('1'); // Second call for user-based check
-  
+
     mockRedisService.ttl.mockResolvedValue(300);
-  
-    await middleware.use(authenticatedReq as any, mockResponse as any, mockNext);
-  
+
+    await middleware.use(
+      authenticatedReq as any,
+      mockResponse as any,
+      mockNext,
+    );
+
     // Verify Redis get was called exactly twice
-    expect(mockRedisService.get).toHaveBeenCalledWith(expect.stringContaining('rateLimit:127.0.0.1')); // IP check
-    expect(mockRedisService.get).toHaveBeenCalledWith(expect.stringContaining('rateLimit:user:user123')); // User check
+    expect(mockRedisService.get).toHaveBeenCalledWith(
+      expect.stringContaining('rateLimit:127.0.0.1'),
+    ); // IP check
+    expect(mockRedisService.get).toHaveBeenCalledWith(
+      expect.stringContaining('rateLimit:user:user123'),
+    ); // User check
     expect(mockRedisService.get).toHaveBeenCalledTimes(2);
     expect(mockNext).toHaveBeenCalled();
   });
@@ -111,7 +128,7 @@ describe('RateLimitMiddleware', () => {
     expect(mockRedisService.set).toHaveBeenCalledWith(
       expect.stringContaining('rateLimit:'),
       '1',
-      expect.any(Number)
+      expect.any(Number),
     );
     expect(mockNext).toHaveBeenCalled();
   });
@@ -119,24 +136,24 @@ describe('RateLimitMiddleware', () => {
   it('should handle Redis errors gracefully', async () => {
     mockRedisService.get.mockRejectedValue(new Error('Redis error'));
     mockRedisService.ttl.mockResolvedValue(300);
-  
+
     await expect(
-      middleware.use(mockRequest as any, mockResponse as any, mockNext)
+      middleware.use(mockRequest as any, mockResponse as any, mockNext),
     ).rejects.toThrow(HttpException);
-  
+
     expect(mockNext).not.toHaveBeenCalled();
   });
 
   it('should properly increment counters', async () => {
     mockRedisService.get.mockResolvedValue('1');
     mockRedisService.ttl.mockResolvedValue(300);
-  
+
     await middleware.use(mockRequest as any, mockResponse as any, mockNext);
-  
+
     expect(mockRedisService.set).toHaveBeenCalledWith(
       expect.any(String),
       '2',
-      expect.any(Number)
+      expect.any(Number),
     );
     expect(mockNext).toHaveBeenCalled();
   });

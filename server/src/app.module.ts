@@ -1,4 +1,9 @@
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import configuration from './config/configuration';
@@ -55,13 +60,12 @@ import { HealthModule } from './health/health.module';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-    .apply(RateLimitMiddleware)
-    .exclude(
-      'health',
-      'public',
-      { path: 'metrics', method: RequestMethod.GET }
-    )
-    .forRoutes('*');
+      .apply(RateLimitMiddleware)
+      .exclude('health', 'public', {
+        path: 'metrics',
+        method: RequestMethod.GET,
+      })
+      .forRoutes('*');
 
     consumer
       .apply(RateLimitMiddleware)

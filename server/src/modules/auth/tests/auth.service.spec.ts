@@ -117,7 +117,7 @@ describe('AuthService', () => {
         { provide: PerformanceService, useValue: mockPerformanceService },
         { provide: TwoFactorService, useValue: mockTwoFactorService },
         { provide: LocationService, useValue: mockLocationService },
-        { provide: PasswordService, useValue: mockPasswordService}
+        { provide: PasswordService, useValue: mockPasswordService },
       ],
     }).compile();
 
@@ -220,7 +220,7 @@ describe('AuthService', () => {
       });
 
       await expect(service.register(registerDto)).rejects.toThrow(
-        PasswordValidationError
+        PasswordValidationError,
       );
     });
 
@@ -590,7 +590,7 @@ describe('AuthService', () => {
       await service.resetPassword({ token, password: newPassword });
 
       expect(mockPasswordService.validatePassword).toHaveBeenCalledWith(
-        newPassword
+        newPassword,
       );
       expect(mockPrismaService.user.update).toHaveBeenCalled();
     });
@@ -603,7 +603,7 @@ describe('AuthService', () => {
       });
 
       await expect(
-        service.resetPassword({ token, password: 'weak' })
+        service.resetPassword({ token, password: 'weak' }),
       ).rejects.toThrow(PasswordValidationError);
     });
   });

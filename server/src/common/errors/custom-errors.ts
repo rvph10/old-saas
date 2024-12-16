@@ -23,7 +23,7 @@ export class PasswordValidationError extends AppError {
       'Password validation failed',
       'PASSWORD_VALIDATION_ERROR',
       400,
-      errors
+      errors,
     );
   }
 }

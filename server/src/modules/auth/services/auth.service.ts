@@ -437,7 +437,7 @@ export class AuthService {
           }
         }
         const passwordValidation = await this.passwordService.validatePassword(
-          registerDto.password
+          registerDto.password,
         );
 
         if (!passwordValidation.isValid) {
@@ -577,10 +577,9 @@ export class AuthService {
             throw new UnauthorizedException('Invalid or expired reset token');
           }
 
-          const passwordValidation = await this.passwordService.validatePassword(
-            resetDto.password
-          );
-  
+          const passwordValidation =
+            await this.passwordService.validatePassword(resetDto.password);
+
           if (!passwordValidation.isValid) {
             throw new PasswordValidationError(passwordValidation.errors);
           }
