@@ -246,10 +246,15 @@ describe('AuthService', () => {
     };
 
     it('should login successfully with correct credentials', async () => {
+      const loginDto = {
+        username: 'testuser',
+        password: 'correctpassword',
+      };
+
       const user = {
         id: '1',
         username: loginDto.username,
-        password: 'hashedPassword',
+        password: await bcrypt.hash('correctpassword', 10),
         email: 'test@example.com',
         isEmailVerified: true,
       };
@@ -257,6 +262,7 @@ describe('AuthService', () => {
       mockPrismaService.user.findFirst.mockResolvedValue(user);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
       mockJwtService.sign.mockReturnValue('jwt_token');
+      mockSessionService.createSession.mockResolvedValue('session-id');
 
       const result = await service.login({
         loginDto,
@@ -264,8 +270,15 @@ describe('AuthService', () => {
         userAgent: 'test-agent',
       });
 
-      expect(result).toHaveProperty('access_token');
-      expect(result).toHaveProperty('user');
+      expect(result).toHaveProperty('sessionId');
+      expect(mockSessionService.createSession).toHaveBeenCalledWith(
+        user.id,
+        expect.objectContaining({
+          ipAddress: '127.0.0.1',
+          userAgent: 'test-agent',
+        }),
+        {},
+      );
     });
 
     it('should throw UnauthorizedException with incorrect password', async () => {
@@ -528,13 +541,13 @@ describe('AuthService', () => {
     it('should create session on successful login', async () => {
       const loginDto = {
         username: 'testuser',
-        password: 'password123',
+        password: 'correctpassword',
       };
 
       const user = {
         id: '1',
         username: loginDto.username,
-        password: 'hashedPassword',
+        password: await bcrypt.hash('correctpassword', 10),
         email: 'test@example.com',
         isEmailVerified: true,
       };
@@ -556,7 +569,9 @@ describe('AuthService', () => {
         expect.objectContaining({
           ipAddress: '127.0.0.1',
           userAgent: 'test-agent',
+          lastActivity: expect.any(String),
         }),
+        {},
       );
     });
   });

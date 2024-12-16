@@ -22,6 +22,18 @@ import { PerformanceService } from '../../../common/monitoring/performance.servi
 import { LocationService } from './location.service';
 import { PasswordValidationError } from 'src/common/errors/custom-errors';
 
+export interface SessionOptions {
+  maxSessions?: number;
+  forceLogoutOthers?: boolean;
+}
+
+interface LoginParams {
+  loginDto: LoginDto;
+  ipAddress: string;
+  userAgent: string;
+  sessionOptions?: SessionOptions;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -154,16 +166,17 @@ export class AuthService {
   /**
    * Region for Auth methods
    */
-  async login(data: {
-    loginDto: LoginDto;
-    ipAddress: string;
-    userAgent: string;
-  }) {
+  async login({
+    loginDto,
+    ipAddress,
+    userAgent,
+    sessionOptions = {},
+  }: LoginParams) {
     return await this.performanceService.measureAsync('login', async () => {
       try {
         const user = await this.checkIfUserExists({
-          username: data.loginDto.username,
-          email: data.loginDto.username,
+          username: loginDto.username,
+          email: loginDto.username,
         });
 
         if (!user) {
@@ -202,7 +215,7 @@ export class AuthService {
         }
 
         const isPasswordValid = await bcrypt.compare(
-          data.loginDto.password,
+          loginDto.password,
           user.password,
         );
 
@@ -214,16 +227,15 @@ export class AuthService {
         } else {
           const isNewLocation = await this.locationService.isNewLoginLocation(
             user.id,
-            data.ipAddress,
+            ipAddress,
           );
 
           if (isNewLocation) {
-            const locationInfo = this.locationService.getLocationInfo(
-              data.ipAddress,
-            );
+            const locationInfo =
+              this.locationService.getLocationInfo(ipAddress);
             await this.mailerService.sendLoginAlert(user.email, {
-              ip: data.ipAddress,
-              browser: data.userAgent,
+              ip: ipAddress,
+              browser: userAgent,
               location: locationInfo,
               time: new Date(),
             });
@@ -254,16 +266,20 @@ export class AuthService {
 
         this.addLoginAttempt({
           userId: user.id,
-          ipAddress: data.ipAddress,
-          userAgent: data.userAgent,
+          ipAddress: ipAddress,
+          userAgent: userAgent,
           success: isPasswordValid,
         });
 
-        const sessionId = await this.sessionService.createSession(user.id, {
-          ipAddress: data.ipAddress,
-          userAgent: data.userAgent,
-          lastActivity: new Date().toISOString(),
-        });
+        const sessionId = await this.sessionService.createSession(
+          user.id,
+          {
+            ipAddress,
+            userAgent,
+            lastActivity: new Date().toISOString(),
+          },
+          sessionOptions,
+        );
 
         const token = this.generateToken(user);
         return { ...token, sessionId };

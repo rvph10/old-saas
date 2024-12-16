@@ -6,7 +6,7 @@ import { PerformanceService } from '../../../common/monitoring/performance.servi
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 
 describe('SessionService', () => {
-  let sessionService: SessionService;
+  let service: SessionService;
   let redisService: RedisService;
   let deviceService: DeviceService;
   let performanceService: PerformanceService;
@@ -34,13 +34,22 @@ describe('SessionService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SessionService,
-        { provide: RedisService, useValue: mockRedisService },
-        { provide: DeviceService, useValue: mockDeviceService },
-        { provide: PerformanceService, useValue: mockPerformanceService },
+        {
+          provide: RedisService,
+          useValue: mockRedisService,
+        },
+        {
+          provide: DeviceService,
+          useValue: mockDeviceService,
+        },
+        {
+          provide: PerformanceService,
+          useValue: mockPerformanceService,
+        },
       ],
     }).compile();
 
-    sessionService = module.get<SessionService>(SessionService);
+    service = module.get<SessionService>(SessionService);
     redisService = module.get<RedisService>(RedisService);
     deviceService = module.get<DeviceService>(DeviceService);
     performanceService = module.get<PerformanceService>(PerformanceService);
@@ -61,28 +70,93 @@ describe('SessionService', () => {
     });
 
     it('should create a new session successfully', async () => {
-      const result = await sessionService.createSession(userId, metadata);
+      const userId = 'test-user-id';
+      const metadata = {
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-browser',
+      };
+
+      mockDeviceService.registerDevice.mockResolvedValue('test-device-id');
+      mockRedisService.keys.mockResolvedValue([]);
+
+      const result = await service.createSession(userId, metadata);
 
       expect(result).toMatch(/^[0-9a-f-]{36}$/);
-      expect(redisService.set).toHaveBeenCalledWith(
+      expect(mockRedisService.set).toHaveBeenCalledWith(
         expect.stringContaining('session:'),
-        expect.stringContaining(userId),
+        expect.any(String),
         24 * 60 * 60,
       );
 
       const setCall = mockRedisService.set.mock.calls[0];
       const sessionData = JSON.parse(setCall[1]);
 
-      expect(sessionData).toEqual(
-        expect.objectContaining({
-          userId,
-          deviceId,
-          ipAddress: metadata.ipAddress,
-          userAgent: metadata.userAgent,
-          createdAt: expect.any(String),
-          lastActivity: expect.any(String),
-        }),
+      expect(sessionData).toEqual({
+        userId,
+        deviceId: 'test-device-id',
+        ipAddress: metadata.ipAddress,
+        userAgent: metadata.userAgent,
+        createdAt: expect.any(String),
+        lastActivity: expect.any(String),
+      });
+    });
+
+    it('should handle session limit', async () => {
+      const userId = 'test-user-id';
+      const metadata = {
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-browser',
+      };
+
+      // Mock 5 existing sessions
+      mockRedisService.keys.mockResolvedValueOnce(
+        Array(5)
+          .fill(0)
+          .map((_, i) => `session:${i}`),
       );
+
+      mockRedisService.get.mockImplementation((key) =>
+        Promise.resolve(JSON.stringify({ userId, deviceId: 'device-1' })),
+      );
+
+      await expect(service.createSession(userId, metadata)).rejects.toThrow(
+        'Maximum sessions limit (5) reached',
+      );
+    });
+
+    // Add test for force logout option
+    it('should force logout other sessions when option is set', async () => {
+      const userId = 'test-user-id';
+      const metadata = {
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-browser',
+      };
+
+      // Mock 5 existing sessions
+      const existingSessions = Array(5)
+        .fill(0)
+        .map((_, i) => `session:${i}`);
+      mockRedisService.keys.mockResolvedValueOnce(existingSessions);
+
+      mockRedisService.get.mockImplementation((key) =>
+        Promise.resolve(JSON.stringify({ userId, deviceId: 'device-1' })),
+      );
+
+      const result = await service.createSession(userId, metadata, {
+        forceLogoutOthers: true,
+      });
+
+      expect(result).toMatch(/^[0-9a-f-]{36}$/);
+      // Each session deletion involves 2 calls: one for the session and one for its activity log
+      expect(mockRedisService.del).toHaveBeenCalledTimes(
+        existingSessions.length * 2,
+      );
+      existingSessions.forEach((sessionKey) => {
+        expect(mockRedisService.del).toHaveBeenCalledWith(sessionKey);
+        expect(mockRedisService.del).toHaveBeenCalledWith(
+          `${sessionKey}:activities`,
+        );
+      });
     });
 
     it('should handle device registration failure', async () => {
@@ -90,9 +164,9 @@ describe('SessionService', () => {
         new Error('Device registration failed'),
       );
 
-      await expect(
-        sessionService.createSession(userId, metadata),
-      ).rejects.toThrow('Device registration failed');
+      await expect(service.createSession(userId, metadata)).rejects.toThrow(
+        'Device registration failed',
+      );
     });
   });
 
@@ -109,7 +183,7 @@ describe('SessionService', () => {
       mockRedisService.get.mockResolvedValue(JSON.stringify(sessionData));
       mockRedisService.ttl.mockResolvedValue(30 * 60);
 
-      const result = await sessionService.getSession(sessionId);
+      const result = await service.getSession(sessionId);
 
       expect(result).toMatchObject({
         userId: sessionData.userId,
@@ -124,7 +198,7 @@ describe('SessionService', () => {
       mockRedisService.get.mockResolvedValue(JSON.stringify(sessionData));
       mockRedisService.ttl.mockResolvedValue(4 * 60 * 60);
 
-      const result = await sessionService.getSession(sessionId);
+      const result = await service.getSession(sessionId);
 
       expect(result).toEqual(expect.objectContaining(sessionData));
       expect(redisService.set).not.toHaveBeenCalled();
@@ -133,7 +207,7 @@ describe('SessionService', () => {
     it('should return null for non-existent session', async () => {
       mockRedisService.get.mockResolvedValue(null);
 
-      const result = await sessionService.getSession(sessionId);
+      const result = await service.getSession(sessionId);
       expect(result).toBeNull();
     });
   });
@@ -150,7 +224,7 @@ describe('SessionService', () => {
     });
 
     it('should extend session with default duration', async () => {
-      await sessionService.extendSession(sessionId);
+      await service.extendSession(sessionId);
 
       expect(redisService.set).toHaveBeenCalledWith(
         `session:${sessionId}`,
@@ -161,7 +235,7 @@ describe('SessionService', () => {
 
     it('should extend session with custom duration', async () => {
       const customDuration = 60 * 60;
-      await sessionService.extendSession(sessionId, customDuration);
+      await service.extendSession(sessionId, customDuration);
 
       expect(redisService.set).toHaveBeenCalledWith(
         `session:${sessionId}`,
@@ -174,7 +248,7 @@ describe('SessionService', () => {
       const tooLongDuration = 8 * 24 * 60 * 60;
 
       await expect(
-        sessionService.extendSession(sessionId, tooLongDuration),
+        service.extendSession(sessionId, tooLongDuration),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -182,14 +256,14 @@ describe('SessionService', () => {
       const tooShortDuration = 60;
 
       await expect(
-        sessionService.extendSession(sessionId, tooShortDuration),
+        service.extendSession(sessionId, tooShortDuration),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw when session not found', async () => {
       mockRedisService.get.mockResolvedValue(null);
 
-      await expect(sessionService.extendSession(sessionId)).rejects.toThrow(
+      await expect(service.extendSession(sessionId)).rejects.toThrow(
         NotFoundException,
       );
     });
@@ -213,10 +287,7 @@ describe('SessionService', () => {
         ),
       );
 
-      const result = await sessionService.revokeDeviceSessions(
-        userId,
-        deviceId,
-      );
+      const result = await service.revokeDeviceSessions(userId, deviceId);
 
       expect(result).toBe(1);
       expect(redisService.del).toHaveBeenCalledTimes(2);
@@ -228,10 +299,7 @@ describe('SessionService', () => {
     it('should handle no sessions found for device', async () => {
       mockRedisService.keys.mockResolvedValue([]);
 
-      const result = await sessionService.revokeDeviceSessions(
-        userId,
-        deviceId,
-      );
+      const result = await service.revokeDeviceSessions(userId, deviceId);
 
       expect(result).toBe(0);
       expect(redisService.del).not.toHaveBeenCalled();
@@ -252,7 +320,7 @@ describe('SessionService', () => {
         ),
       );
 
-      const result = await sessionService.getUserSessions(userId);
+      const result = await service.getUserSessions(userId);
 
       expect(result).toHaveLength(2);
       expect(result).toContain('1');
@@ -262,7 +330,7 @@ describe('SessionService', () => {
     it('should handle no sessions found', async () => {
       mockRedisService.keys.mockResolvedValue([]);
 
-      const result = await sessionService.getUserSessions(userId);
+      const result = await service.getUserSessions(userId);
 
       expect(result).toEqual([]);
     });
@@ -272,7 +340,7 @@ describe('SessionService', () => {
     const sessionId = 'test-session-id';
 
     it('should destroy session and activity log', async () => {
-      await sessionService.destroySession(sessionId);
+      await service.destroySession(sessionId);
 
       expect(redisService.del).toHaveBeenCalledWith(`session:${sessionId}`);
       expect(redisService.del).toHaveBeenCalledWith(
@@ -283,7 +351,7 @@ describe('SessionService', () => {
     it('should handle non-existent session', async () => {
       mockRedisService.del.mockResolvedValue(0);
 
-      await sessionService.destroySession(sessionId);
+      await service.destroySession(sessionId);
 
       expect(redisService.del).toHaveBeenCalled();
     });
@@ -302,7 +370,7 @@ describe('SessionService', () => {
         Promise.resolve(JSON.stringify({ userId })),
       );
 
-      await sessionService.revokeAllUserSessions(userId, exceptSessionId);
+      await service.revokeAllUserSessions(userId, exceptSessionId);
 
       expect(redisService.del).toHaveBeenCalledTimes(4);
       expect(redisService.del).not.toHaveBeenCalledWith(
@@ -319,7 +387,7 @@ describe('SessionService', () => {
         Promise.resolve(JSON.stringify({ userId })),
       );
 
-      await sessionService.revokeAllUserSessions(userId);
+      await service.revokeAllUserSessions(userId);
 
       // We expect 6 calls: 3 sessions × 2 deletions each (session + activity log)
       expect(redisService.del).toHaveBeenCalledTimes(6);

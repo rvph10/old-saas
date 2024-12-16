@@ -123,6 +123,18 @@ describe('AuthController', () => {
     };
 
     it('should login successfully', async () => {
+      const loginDto = {
+        username: 'testuser',
+        password: 'Password123!',
+      };
+
+      const mockRequest = {
+        ip: '127.0.0.1',
+        headers: {
+          'user-agent': 'test-browser',
+        },
+      };
+
       const expectedResponse = {
         access_token: 'jwt_token',
         sessionId: 'session-id',
@@ -133,12 +145,18 @@ describe('AuthController', () => {
       };
 
       mockAuthService.login.mockResolvedValue(expectedResponse);
+
       const result = await controller.login(loginDto, mockRequest as any);
+
       expect(result).toBe(expectedResponse);
       expect(mockAuthService.login).toHaveBeenCalledWith({
         loginDto,
         ipAddress: mockRequest.ip,
         userAgent: mockRequest.headers['user-agent'],
+        sessionOptions: {
+          forceLogoutOthers: undefined,
+          maxSessions: 5,
+        },
       });
     });
   });

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { RedisService } from 'src/redis/redis.service';
@@ -8,11 +9,27 @@ import { v4 as uuidv4 } from 'uuid';
 import { DeviceService } from './device.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 
+interface SessionOptions {
+  maxSessions?: number;
+  forceLogoutOthers?: boolean;
+}
+
+interface SessionMetadata {
+  ipAddress?: string;
+  userAgent?: string;
+  lastActivity?: string;
+  deviceId?: string;
+  [key: string]: any;
+}
+
 @Injectable()
 export class SessionService {
   private readonly SESSION_PREFIX = 'session:';
   private readonly SESSION_TTL = 24 * 60 * 60;
   private readonly SESSION_REFRESH_THRESHOLD = 60 * 60;
+  private readonly DEFAULT_MAX_SESSIONS = 5;
+
+  private readonly logger = new Logger(SessionService.name);
 
   constructor(
     private readonly redisService: RedisService,
@@ -20,28 +37,118 @@ export class SessionService {
     private readonly performanceService: PerformanceService,
   ) {}
 
-  async createSession(userId: string, metadata: any = {}): Promise<string> {
-    const deviceId = await this.deviceService.registerDevice(
-      userId,
-      metadata.userAgent,
-    );
+  async createSession(
+    userId: string,
+    metadata: SessionMetadata = {},
+    options: SessionOptions = {},
+  ): Promise<string> {
+    try {
+      const currentSessions = await this.getUserSessions(userId);
+      const maxSessions = options.maxSessions ?? this.DEFAULT_MAX_SESSIONS;
 
-    const sessionData = {
-      userId,
-      deviceId,
-      createdAt: new Date().toISOString(),
-      lastActivity: new Date().toISOString(),
-      ...metadata,
-    };
+      if (currentSessions.length >= maxSessions) {
+        if (options.forceLogoutOthers) {
+          this.logger.log(
+            `Force logging out other sessions for user ${userId}`,
+          );
+          await Promise.all(
+            currentSessions.map((sid) => this.destroySession(sid)),
+          );
+        } else {
+          this.logger.warn(`Session limit reached for user ${userId}`);
+          throw new BadRequestException(
+            `Maximum sessions limit (${maxSessions}) reached. Please logout from another device or use force logout option.`,
+          );
+        }
+      }
 
-    const sessionId = uuidv4();
-    await this.redisService.set(
-      `${this.SESSION_PREFIX}${sessionId}`,
-      JSON.stringify(sessionData),
-      this.SESSION_TTL,
-    );
+      const deviceId = await this.deviceService.registerDevice(
+        userId,
+        metadata.userAgent || 'unknown',
+      );
 
-    return sessionId;
+      const sessionData = {
+        userId,
+        deviceId,
+        createdAt: new Date().toISOString(),
+        lastActivity: new Date().toISOString(),
+        ...metadata,
+      };
+
+      const sessionId = uuidv4();
+      const key = `${this.SESSION_PREFIX}${sessionId}`;
+
+      await this.redisService.set(
+        key,
+        JSON.stringify(sessionData),
+        this.SESSION_TTL,
+      );
+
+      // Track metrics
+      this.performanceService.incrementCounter('sessions_created');
+      this.performanceService.setGauge(
+        `active_sessions_${userId}`,
+        (await this.getUserSessions(userId)).length,
+      );
+
+      return sessionId;
+    } catch (error) {
+      this.logger.error(
+        `Failed to create session for user ${userId}:`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  async validateSessionLimit(
+    userId: string,
+    maxSessions: number = this.DEFAULT_MAX_SESSIONS,
+  ): Promise<boolean> {
+    const sessions = await this.getUserSessions(userId);
+    return sessions.length < maxSessions;
+  }
+
+  async forceLogoutOtherSessions(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<number> {
+    const sessions = await this.getUserSessions(userId);
+    let logoutCount = 0;
+
+    for (const sessionId of sessions) {
+      if (sessionId !== currentSessionId) {
+        await this.destroySession(sessionId);
+        logoutCount++;
+      }
+    }
+
+    return logoutCount;
+  }
+
+  // Add this helper method to clean up old sessions
+  async cleanupOldSessions(
+    userId: string,
+    maxAgeDays: number = 30,
+  ): Promise<number> {
+    const sessions = await this.getUserSessions(userId);
+    let cleanedCount = 0;
+
+    for (const sessionId of sessions) {
+      const session = await this.getSession(sessionId);
+      if (session) {
+        const createdAt = new Date(session.createdAt);
+        const ageInDays =
+          (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+
+        if (ageInDays > maxAgeDays) {
+          await this.destroySession(sessionId);
+          cleanedCount++;
+        }
+      }
+    }
+
+    return cleanedCount;
   }
 
   async getSession(sessionId: string): Promise<any | null> {

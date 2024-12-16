@@ -101,12 +101,52 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  login(@Body() loginDto: LoginDto, @Req() request: Request) {
+  async login(
+    @Body() loginDto: LoginDto,
+    @Req() request: Request,
+    @Body('forceLogout') forceLogout?: boolean,
+  ) {
     return this.authService.login({
       loginDto,
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'] || 'unknown',
+      sessionOptions: {
+        forceLogoutOthers: forceLogout,
+        maxSessions: 5,
+      },
     });
+  }
+
+  @Post('sessions/cleanup')
+  @UseGuards(JwtAuthGuard)
+  async cleanupOldSessions(
+    @Req() req: Request & { user: any },
+    @Body('maxAgeDays') maxAgeDays?: number,
+  ) {
+    const cleanedCount = await this.sessionService.cleanupOldSessions(
+      req.user.id,
+      maxAgeDays,
+    );
+    return {
+      message: `Cleaned up ${cleanedCount} old sessions`,
+      remainingSessions: await this.sessionService.getUserSessions(req.user.id),
+    };
+  }
+
+  @Delete('sessions/others')
+  @UseGuards(JwtAuthGuard)
+  async logoutOtherSessions(
+    @Req() req: Request & { user: any },
+    @Headers('session-id') currentSessionId: string,
+  ) {
+    const logoutCount = await this.sessionService.forceLogoutOtherSessions(
+      req.user.id,
+      currentSessionId,
+    );
+    return {
+      message: `Logged out from ${logoutCount} other sessions`,
+      currentSession: currentSessionId,
+    };
   }
 
   @Post('logout')
