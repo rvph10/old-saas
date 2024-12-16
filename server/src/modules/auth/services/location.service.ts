@@ -6,7 +6,10 @@ import * as geoip from 'geoip-lite';
 export class LocationService {
   constructor(private prisma: PrismaService) {}
 
-  async isNewLoginLocation(userId: string, ipAddress: string): Promise<boolean> {
+  async isNewLoginLocation(
+    userId: string,
+    ipAddress: string,
+  ): Promise<boolean> {
     const geo = geoip.lookup(ipAddress);
     if (!geo) return true;
 

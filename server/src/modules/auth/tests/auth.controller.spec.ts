@@ -154,9 +154,13 @@ describe('AuthController', () => {
         ];
         mockDeviceService.getUserDevices.mockResolvedValue(mockDevices);
 
-        const result = await controller.getUserDevices({ user: mockUser } as any);
+        const result = await controller.getUserDevices({
+          user: mockUser,
+        } as any);
         expect(result).toEqual(mockDevices);
-        expect(mockDeviceService.getUserDevices).toHaveBeenCalledWith(mockUser.id);
+        expect(mockDeviceService.getUserDevices).toHaveBeenCalledWith(
+          mockUser.id,
+        );
       });
     });
 
@@ -305,11 +309,11 @@ describe('AuthController', () => {
 
   describe('2FA', () => {
     const mockUser = { id: '1', username: 'testuser' };
-  
+
     beforeEach(() => {
       // Add TwoFactorService to providers in the TestingModule setup
     });
-  
+
     describe('setup2FA', () => {
       it('should generate 2FA secret', async () => {
         const mockSecret = {
@@ -317,59 +321,59 @@ describe('AuthController', () => {
           qrCode: 'QR_CODE_URL',
         };
         mockTwoFactorService.generateSecret.mockResolvedValue(mockSecret);
-  
+
         const result = await controller.setup2FA({ user: mockUser } as any);
         expect(result).toEqual(mockSecret);
       });
     });
-  
+
     describe('enable2FA', () => {
       it('should enable 2FA with valid token', async () => {
         mockTwoFactorService.verifyToken.mockResolvedValue(true);
-  
-        const result = await controller.enable2FA(
-          { user: mockUser } as any,
-          { token: '123456' },
-        );
-  
+
+        const result = await controller.enable2FA({ user: mockUser } as any, {
+          token: '123456',
+        });
+
         expect(result.message).toBe('2FA enabled successfully');
       });
-  
+
       it('should reject invalid token', async () => {
         mockTwoFactorService.verifyToken.mockResolvedValue(false);
-  
+
         await expect(
           controller.enable2FA({ user: mockUser } as any, { token: '123456' }),
         ).rejects.toThrow(UnauthorizedException);
       });
     });
-  
+
     describe('verify2FA', () => {
       it('should verify valid 2FA token', async () => {
         mockTwoFactorService.verifyToken.mockResolvedValue(true);
-  
-        const result = await controller.verify2FA(
-          { user: mockUser } as any,
-          { token: '123456' },
-        );
-  
+
+        const result = await controller.verify2FA({ user: mockUser } as any, {
+          token: '123456',
+        });
+
         expect(result.message).toBe('2FA verification successful');
       });
-  
+
       it('should reject invalid 2FA token', async () => {
         mockTwoFactorService.verifyToken.mockResolvedValue(false);
-  
+
         await expect(
           controller.verify2FA({ user: mockUser } as any, { token: '123456' }),
         ).rejects.toThrow(UnauthorizedException);
       });
     });
-  
+
     describe('disable2FA', () => {
       it('should disable 2FA', async () => {
         const result = await controller.disable2FA({ user: mockUser } as any);
         expect(result.message).toBe('2FA disabled successfully');
-        expect(mockTwoFactorService.disable2FA).toHaveBeenCalledWith(mockUser.id);
+        expect(mockTwoFactorService.disable2FA).toHaveBeenCalledWith(
+          mockUser.id,
+        );
       });
     });
   });

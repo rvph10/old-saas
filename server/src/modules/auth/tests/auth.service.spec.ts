@@ -39,7 +39,7 @@ describe('AuthService', () => {
     passwordHistory: {
       findMany: jest.fn(),
       create: jest.fn(),
-    }
+    },
   };
 
   const mockTwoFactorService = {
@@ -48,7 +48,7 @@ describe('AuthService', () => {
     enable2FA: jest.fn(),
     disable2FA: jest.fn(),
   };
-  
+
   const mockLocationService = {
     isNewLoginLocation: jest.fn(),
     getLocationInfo: jest.fn(),
@@ -293,7 +293,7 @@ describe('AuthService', () => {
         ipAddress: '127.0.0.1',
         userAgent: 'test-agent',
       };
-'Password must be different from recent passwords, please choose a new one'
+      ('Password must be different from recent passwords, please choose a new one');
       it('should increment failed login attempts', async () => {
         const user = {
           id: '1',
@@ -351,7 +351,7 @@ describe('AuthService', () => {
         mockPrismaService.user.findFirst.mockResolvedValue(user);
 
         await expect(service.login(loginData)).rejects.toThrow(
-          /Account temporarily locked for security. Please try again in \d+ minutes/
+          /Account temporarily locked for security. Please try again in \d+ minutes/,
         );
       });
 
@@ -580,9 +580,9 @@ describe('AuthService', () => {
       const newPassword = 'newPassword123!';
       mockRedisService.get.mockResolvedValue(userId);
       mockPrismaService.passwordHistory.findMany.mockResolvedValue([]);
-  
+
       await service.resetPassword({ token, password: newPassword });
-  
+
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: userId },
         data: { password: expect.any(String) },
@@ -657,88 +657,101 @@ describe('AuthService', () => {
       const userId = '1';
       const newPassword = 'newPassword123!';
       mockPrismaService.passwordHistory.findMany.mockResolvedValue([
-        { password: await bcrypt.hash(newPassword, 10) }
+        { password: await bcrypt.hash(newPassword, 10) },
       ]);
-  
-      await expect(service.checkPasswordHistory(userId, newPassword))
-        .rejects.toThrow('Password must be different from recent passwords, please choose a new one');
+
+      await expect(
+        service.checkPasswordHistory(userId, newPassword),
+      ).rejects.toThrow(
+        'Password must be different from recent passwords, please choose a new one',
+      );
     });
-  
+
     it('should save password to history', async () => {
       const userId = '1';
       const hashedPassword = 'hashedPassword123';
 
       await service.savePasswordToHistory(userId, hashedPassword);
-      
+
       expect(mockPrismaService.passwordHistory.create).toHaveBeenCalledWith({
         data: {
           userId,
-          password: hashedPassword
-        }
+          password: hashedPassword,
+        },
       });
     });
   });
-  
+
   describe('email verification', () => {
     it('should resend verification email successfully', async () => {
       const email = 'test@example.com';
       mockPrismaService.user.findUnique.mockResolvedValue({
         id: '1',
         email,
-        isEmailVerified: false
+        isEmailVerified: false,
       });
-  
+
       const result = await service.resendVerificationEmail(email);
-      
-      expect(result.message).toBe('If your email is registered, a verification link has been sent');
+
+      expect(result.message).toBe(
+        'If your email is registered, a verification link has been sent',
+      );
       expect(mockMailerService.sendEmailVerification).toHaveBeenCalled();
     });
-  
+
     it('should handle already verified email', async () => {
       const email = 'test@example.com';
       mockPrismaService.user.findUnique.mockResolvedValue({
         id: '1',
         email,
-        isEmailVerified: true
+        isEmailVerified: true,
       });
-  
+
       const result = await service.resendVerificationEmail(email);
       expect(result.message).toBe('Email already verified');
     });
   });
-  
+
   describe('blockAccount', () => {
     it('should block user account', async () => {
       const userId = '1';
       await service.blockAccount(userId);
-  
+
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: userId },
         data: {
-          deletedAt: expect.any(Date)
-        }
+          deletedAt: expect.any(Date),
+        },
       });
     });
   });
-  
+
   describe('logoutAllDevices', () => {
     const userId = '1';
-    
+
     it('should logout from all devices except current', async () => {
       const currentSessionId = 'current-session';
-      mockSessionService.getUserSessions.mockResolvedValue(['session1', 'session2', currentSessionId]);
-  
+      mockSessionService.getUserSessions.mockResolvedValue([
+        'session1',
+        'session2',
+        currentSessionId,
+      ]);
+
       const result = await service.logoutAllDevices(userId, currentSessionId);
-  
+
       expect(result.sessionsTerminated).toBe(2);
       expect(mockSessionService.destroySession).toHaveBeenCalledTimes(2);
     });
-  
+
     it('should logout from all devices', async () => {
-      mockSessionService.getUserSessions.mockResolvedValue(['session1', 'session2', 'session3']);
-  
+      mockSessionService.getUserSessions.mockResolvedValue([
+        'session1',
+        'session2',
+        'session3',
+      ]);
+
       const result = await service.logoutAllDevices(userId);
-  
+
       expect(result.sessionsTerminated).toBe(3);
       expect(mockSessionService.destroySession).toHaveBeenCalledTimes(3);
     });

@@ -22,9 +22,12 @@ describe('DeviceService', () => {
   };
 
   const mockUserAgents = {
-    desktop: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    mobile: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
-    tablet: 'Mozilla/5.0 (iPad; CPU OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
+    desktop:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    mobile:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
+    tablet:
+      'Mozilla/5.0 (iPad; CPU OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
   };
 
   beforeEach(async () => {
@@ -48,16 +51,20 @@ describe('DeviceService', () => {
 
   describe('getDeviceInfo', () => {
     beforeEach(() => {
-      (UAParser as jest.MockedClass<typeof UAParser>).mockImplementation(() => ({
-        getBrowser: jest.fn().mockReturnValue({ name: 'Chrome', version: '120.0.0' }),
-        getOS: jest.fn().mockReturnValue({ name: 'Windows', version: '10' }),
-        getDevice: jest.fn().mockReturnValue({ type: 'desktop' }),
-        getUA: jest.fn(),
-        getCPU: jest.fn(),
-        getEngine: jest.fn(),
-        getResult: jest.fn(),
-        setUA: jest.fn(),
-      }));
+      (UAParser as jest.MockedClass<typeof UAParser>).mockImplementation(
+        () => ({
+          getBrowser: jest
+            .fn()
+            .mockReturnValue({ name: 'Chrome', version: '120.0.0' }),
+          getOS: jest.fn().mockReturnValue({ name: 'Windows', version: '10' }),
+          getDevice: jest.fn().mockReturnValue({ type: 'desktop' }),
+          getUA: jest.fn(),
+          getCPU: jest.fn(),
+          getEngine: jest.fn(),
+          getResult: jest.fn(),
+          setUA: jest.fn(),
+        }),
+      );
     });
 
     it('should parse desktop user agent correctly', () => {
@@ -74,16 +81,20 @@ describe('DeviceService', () => {
     });
 
     it('should parse mobile user agent correctly', () => {
-      (UAParser as jest.MockedClass<typeof UAParser>).mockImplementation(() => ({
-        getBrowser: jest.fn().mockReturnValue({ name: 'Mobile Safari', version: '14.1.2' }),
-        getOS: jest.fn().mockReturnValue({ name: 'iOS', version: '14.7.1' }),
-        getDevice: jest.fn().mockReturnValue({ type: 'mobile' }),
-        getUA: jest.fn(),
-        getCPU: jest.fn(),
-        getEngine: jest.fn(),
-        getResult: jest.fn(),
-        setUA: jest.fn(),
-      }));
+      (UAParser as jest.MockedClass<typeof UAParser>).mockImplementation(
+        () => ({
+          getBrowser: jest
+            .fn()
+            .mockReturnValue({ name: 'Mobile Safari', version: '14.1.2' }),
+          getOS: jest.fn().mockReturnValue({ name: 'iOS', version: '14.7.1' }),
+          getDevice: jest.fn().mockReturnValue({ type: 'mobile' }),
+          getUA: jest.fn(),
+          getCPU: jest.fn(),
+          getEngine: jest.fn(),
+          getResult: jest.fn(),
+          setUA: jest.fn(),
+        }),
+      );
 
       const result = service.getDeviceInfo(mockUserAgents.mobile);
 
@@ -98,16 +109,20 @@ describe('DeviceService', () => {
     });
 
     it('should handle missing browser or OS versions', () => {
-      (UAParser as jest.MockedClass<typeof UAParser>).mockImplementation(() => ({
-        getBrowser: jest.fn().mockReturnValue({ name: 'Chrome', version: null }),
-        getOS: jest.fn().mockReturnValue({ name: 'Windows', version: null }),
-        getDevice: jest.fn().mockReturnValue({ type: 'desktop' }),
-        getUA: jest.fn(),
-        getCPU: jest.fn(),
-        getEngine: jest.fn(),
-        getResult: jest.fn(),
-        setUA: jest.fn(),
-      }));
+      (UAParser as jest.MockedClass<typeof UAParser>).mockImplementation(
+        () => ({
+          getBrowser: jest
+            .fn()
+            .mockReturnValue({ name: 'Chrome', version: null }),
+          getOS: jest.fn().mockReturnValue({ name: 'Windows', version: null }),
+          getDevice: jest.fn().mockReturnValue({ type: 'desktop' }),
+          getUA: jest.fn(),
+          getCPU: jest.fn(),
+          getEngine: jest.fn(),
+          getResult: jest.fn(),
+          setUA: jest.fn(),
+        }),
+      );
 
       const result = service.getDeviceInfo(mockUserAgents.desktop);
 
@@ -124,17 +139,21 @@ describe('DeviceService', () => {
 
     it('should generate different deviceId for different device info', () => {
       const desktopResult = service.getDeviceInfo(mockUserAgents.desktop);
-      
-      (UAParser as jest.MockedClass<typeof UAParser>).mockImplementation(() => ({
-        getBrowser: jest.fn().mockReturnValue({ name: 'Mobile Safari', version: '14.1.2' }),
-        getOS: jest.fn().mockReturnValue({ name: 'iOS', version: '14.7.1' }),
-        getDevice: jest.fn().mockReturnValue({ type: 'mobile' }),
-        getUA: jest.fn(),
-        getCPU: jest.fn(),
-        getEngine: jest.fn(),
-        getResult: jest.fn(),
-        setUA: jest.fn(),
-      }));
+
+      (UAParser as jest.MockedClass<typeof UAParser>).mockImplementation(
+        () => ({
+          getBrowser: jest
+            .fn()
+            .mockReturnValue({ name: 'Mobile Safari', version: '14.1.2' }),
+          getOS: jest.fn().mockReturnValue({ name: 'iOS', version: '14.7.1' }),
+          getDevice: jest.fn().mockReturnValue({ type: 'mobile' }),
+          getUA: jest.fn(),
+          getCPU: jest.fn(),
+          getEngine: jest.fn(),
+          getResult: jest.fn(),
+          setUA: jest.fn(),
+        }),
+      );
 
       const mobileResult = service.getDeviceInfo(mockUserAgents.mobile);
 
@@ -169,7 +188,10 @@ describe('DeviceService', () => {
 
       mockPrismaService.userDevice.upsert.mockResolvedValue(mockDevice);
 
-      const result = await service.registerDevice(userId, mockUserAgents.desktop);
+      const result = await service.registerDevice(
+        userId,
+        mockUserAgents.desktop,
+      );
 
       expect(result).toBe(mockDeviceInfo.deviceId);
       expect(mockPrismaService.userDevice.upsert).toHaveBeenCalledWith({
@@ -216,11 +238,13 @@ describe('DeviceService', () => {
     });
 
     it('should handle errors during device registration', async () => {
-      mockPrismaService.userDevice.upsert.mockRejectedValue(new Error('Database error'));
+      mockPrismaService.userDevice.upsert.mockRejectedValue(
+        new Error('Database error'),
+      );
 
-      await expect(service.registerDevice(userId, mockUserAgents.desktop))
-        .rejects
-        .toThrow('Database error');
+      await expect(
+        service.registerDevice(userId, mockUserAgents.desktop),
+      ).rejects.toThrow('Database error');
     });
   });
 
@@ -270,11 +294,13 @@ describe('DeviceService', () => {
     });
 
     it('should handle database errors', async () => {
-      mockPrismaService.userDevice.findMany.mockRejectedValue(new Error('Database error'));
+      mockPrismaService.userDevice.findMany.mockRejectedValue(
+        new Error('Database error'),
+      );
 
-      await expect(service.getUserDevices(userId))
-        .rejects
-        .toThrow('Database error');
+      await expect(service.getUserDevices(userId)).rejects.toThrow(
+        'Database error',
+      );
     });
   });
 
@@ -313,11 +339,13 @@ describe('DeviceService', () => {
     });
 
     it('should handle database errors', async () => {
-      mockPrismaService.userDevice.updateMany.mockRejectedValue(new Error('Database error'));
+      mockPrismaService.userDevice.updateMany.mockRejectedValue(
+        new Error('Database error'),
+      );
 
-      await expect(service.setDeviceTrusted(deviceId, userId, true))
-        .rejects
-        .toThrow('Database error');
+      await expect(
+        service.setDeviceTrusted(deviceId, userId, true),
+      ).rejects.toThrow('Database error');
     });
   });
 
@@ -346,11 +374,13 @@ describe('DeviceService', () => {
     });
 
     it('should handle database errors during removal', async () => {
-      mockPrismaService.userDevice.deleteMany.mockRejectedValue(new Error('Database error'));
+      mockPrismaService.userDevice.deleteMany.mockRejectedValue(
+        new Error('Database error'),
+      );
 
-      await expect(service.removeDevice(deviceId, userId))
-        .rejects
-        .toThrow('Database error');
+      await expect(service.removeDevice(deviceId, userId)).rejects.toThrow(
+        'Database error',
+      );
     });
   });
 });

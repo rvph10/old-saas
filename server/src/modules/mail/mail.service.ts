@@ -67,16 +67,19 @@ export class MailerService {
     }
   }
 
-  async sendLoginAlert(email: string, data: {
-    ip: string;
-    browser: string;
-    location: {
-      country: string;
-      city: string;
-      timezone: string;
-    };
-    time: Date;
-  }) {
+  async sendLoginAlert(
+    email: string,
+    data: {
+      ip: string;
+      browser: string;
+      location: {
+        country: string;
+        city: string;
+        timezone: string;
+      };
+      time: Date;
+    },
+  ) {
     const html = `
       <h2>New Login Detected</h2>
       <p>We detected a new login to your account from an unrecognized device:</p>

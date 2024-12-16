@@ -42,8 +42,8 @@ model User {
   passwordResetExpires DateTime?
 
   // 2FA
-  twoFactorSecret    String?
-  twoFactorEnabled   Boolean   @default(false)
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean @default(false)
 
   // Failed login attempts tracking
   failedLoginAttempts    Int       @default(0)

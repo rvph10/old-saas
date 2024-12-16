@@ -165,12 +165,16 @@ export class AuthService {
 
         if (!user) {
           this.performanceService.incrementCounter('failed_logins');
-          throw new UnauthorizedException('Account not found with these credentials');
+          throw new UnauthorizedException(
+            'Account not found with these credentials',
+          );
         }
 
         if (user.deletedAt) {
           this.performanceService.incrementCounter('failed_logins');
-          throw new UnauthorizedException('This account has been deactivated. Please contact support for assistance');
+          throw new UnauthorizedException(
+            'This account has been deactivated. Please contact support for assistance',
+          );
         }
 
         if (!user.isEmailVerified) {
@@ -187,7 +191,7 @@ export class AuthService {
               new Date(),
             );
             throw new UnauthorizedException(
-              `Account temporarily locked for security. Please try again in ${remainingMinutes} minutes`
+              `Account temporarily locked for security. Please try again in ${remainingMinutes} minutes`,
             );
           } else {
             await this.resetFailedAttempts(user.id);
@@ -201,15 +205,19 @@ export class AuthService {
 
         if (!isPasswordValid) {
           await this.handleFailedLogin(user);
-          throw new UnauthorizedException('Invalid credentials, please try again');
-        }else {
+          throw new UnauthorizedException(
+            'Invalid credentials, please try again',
+          );
+        } else {
           const isNewLocation = await this.locationService.isNewLoginLocation(
             user.id,
             data.ipAddress,
           );
-  
+
           if (isNewLocation) {
-            const locationInfo = this.locationService.getLocationInfo(data.ipAddress);
+            const locationInfo = this.locationService.getLocationInfo(
+              data.ipAddress,
+            );
             await this.mailerService.sendLoginAlert(user.email, {
               ip: data.ipAddress,
               browser: data.userAgent,
@@ -217,7 +225,7 @@ export class AuthService {
               time: new Date(),
             });
           }
-  
+
           // If 2FA is enabled, return a different response
           if (user.twoFactorEnabled) {
             return {
@@ -267,7 +275,7 @@ export class AuthService {
     const payload = {
       sub: user.id,
       type: '2fa-pending',
-      exp: Math.floor(Date.now() / 1000) + (5 * 60),
+      exp: Math.floor(Date.now() / 1000) + 5 * 60,
     };
     return this.jwtService.sign(payload);
   }
@@ -422,7 +430,9 @@ export class AuthService {
             throw new ConflictException('Email already in use');
           }
           if (existingUser.username === registerDto.username) {
-            throw new ConflictException('Username already in use, please choose another');
+            throw new ConflictException(
+              'Username already in use, please choose another',
+            );
           }
         }
         this.performanceService.incrementCounter('successful_registrations');
