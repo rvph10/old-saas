@@ -20,6 +20,7 @@ import { PasswordService } from './password.service';
 import { addMinutes, differenceInMinutes } from 'date-fns';
 import { PerformanceService } from '../../../common/monitoring/performance.service';
 import { LocationService } from './location.service';
+import { PasswordValidationError } from 'src/common/errors/custom-errors';
 
 @Injectable()
 export class AuthService {
@@ -440,10 +441,7 @@ export class AuthService {
         );
 
         if (!passwordValidation.isValid) {
-          throw new BadRequestException({
-            message: 'Password validation failed',
-            errors: passwordValidation.errors,
-          });
+          throw new PasswordValidationError(passwordValidation.errors);
         }
 
         this.performanceService.incrementCounter('successful_registrations');
@@ -584,10 +582,7 @@ export class AuthService {
           );
   
           if (!passwordValidation.isValid) {
-            throw new BadRequestException({
-              message: 'Password validation failed',
-              errors: passwordValidation.errors,
-            });
+            throw new PasswordValidationError(passwordValidation.errors);
           }
 
           await this.checkPasswordHistory(userId, resetDto.password);

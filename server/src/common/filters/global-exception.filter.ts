@@ -13,7 +13,7 @@ import { AppError } from '../errors/custom-errors';
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
 
-  catch(exception: Error, host: ArgumentsHost) {
+  catch(exception: Error | HttpException | AppError, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
@@ -30,7 +30,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       details = exception.details;
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
-      message = exception.message;
+      const response = exception.getResponse();
+      
+      if (typeof response === 'object') {
+        message = (response as any).message || exception.message;
+        details = (response as any).errors || null;
+        code = (response as any).code || 'BAD_REQUEST';
+      } else {
+        message = response;
+      }
     }
 
     // Log the error
@@ -50,7 +58,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       method: request.method,
       message,
       code,
-      details,
+      details
     });
   }
 }

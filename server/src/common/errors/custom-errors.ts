@@ -17,6 +17,17 @@ export class DatabaseError extends AppError {
   }
 }
 
+export class PasswordValidationError extends AppError {
+  constructor(errors: string[]) {
+    super(
+      'Password validation failed',
+      'PASSWORD_VALIDATION_ERROR',
+      400,
+      errors
+    );
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(message: string, details?: any) {
     super(message, 'VALIDATION_ERROR', 400, details);

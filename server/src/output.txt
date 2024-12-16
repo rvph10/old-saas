@@ -1,0 +1,3489 @@
+// app.controller.spec.ts
+import { Test, TestingModule } from '@nestjs/testing';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
+describe('AppController', () => {
+  let appController: AppController;
+
+  beforeEach(async () => {
+    const app: TestingModule = await Test.createTestingModule({
+      controllers: [AppController],
+      providers: [AppService],
+    }).compile();
+
+    appController = app.get<AppController>(AppController);
+  });
+
+  describe('root', () => {
+    it('should return "Hello World!"', () => {
+      expect(appController.getHello()).toBe('Hello World!');
+    });
+  });
+});
+
+
+// app.controller.ts
+import { Controller, Get } from '@nestjs/common';
+import { AppService } from './app.service';
+
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+}
+
+
+// app.module.ts
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { PrismaModule } from './prisma/prisma.module';
+import configuration from './config/configuration';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AuthModule } from './modules/auth/module/auth.module';
+import { SessionMiddleware } from './modules/auth/middleware/session.middleware';
+import { RateLimitMiddleware } from './modules/auth/middleware/rate-limit.middleware';
+import { RequestLoggerMiddleware } from './modules/auth/middleware/request-logger.middleware';
+import { RedisModule } from './redis/redis.module';
+import { PrismaService } from './prisma/prisma.service';
+import { MiddlewareModule } from './modules/middleware/middleware.module';
+import { HealthController } from './health/health.controller';
+import { MailModule } from './modules/mail/mail.module';
+import { ErrorHandlingService } from './common/errors/error-handling.service';
+import { SecurityHeadersMiddleware } from './common/security/security-headers.middleware';
+import { MonitoringInterceptor } from './common/monitoring/monitor.interceptor';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { MonitoringModule } from './common/monitoring/monitoring.module';
+import { MetricsService } from './common/monitoring/metrics.service';
+import { HealthModule } from './health/health.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+    }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 10,
+      },
+    ]),
+    PrismaModule,
+    AuthModule,
+    RedisModule,
+    MiddlewareModule,
+    MailModule,
+    MonitoringModule,
+    AuthModule,
+    HealthModule,
+  ],
+  controllers: [HealthController],
+  providers: [
+    PrismaService,
+    ErrorHandlingService,
+    MetricsService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MonitoringInterceptor,
+    },
+  ],
+})
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(SecurityHeadersMiddleware, RequestLoggerMiddleware)
+      .forRoutes('*');
+
+    consumer
+      .apply(RateLimitMiddleware)
+      .exclude('health', 'public')
+      .forRoutes('*');
+
+    consumer.apply(SessionMiddleware).forRoutes('auth/*');
+  }
+}
+
+
+// app.service.ts
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class AppService {
+  getHello(): string {
+    return 'Hello World!';
+  }
+}
+
+
+// common/errors/custom-errors.ts
+export class AppError extends Error {
+  constructor(
+    public readonly message: string,
+    public readonly code: string,
+    public readonly httpStatus: number,
+    public readonly details?: any,
+  ) {
+    super(message);
+    this.name = this.constructor.name;
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+export class DatabaseError extends AppError {
+  constructor(message: string, details?: any) {
+    super(message, 'DATABASE_ERROR', 500, details);
+  }
+}
+
+export class ValidationError extends AppError {
+  constructor(message: string, details?: any) {
+    super(message, 'VALIDATION_ERROR', 400, details);
+  }
+}
+
+export class AuthenticationError extends AppError {
+  constructor(message: string, details?: any) {
+    super(message, 'AUTHENTICATION_ERROR', 401, details);
+  }
+}
+
+export class AuthorizationError extends AppError {
+  constructor(message: string, details?: any) {
+    super(message, 'AUTHORIZATION_ERROR', 403, details);
+  }
+}
+
+
+// common/errors/error-codes.ts
+export const DATABASE_ERRORS = {
+  UNIQUE_CONSTRAINT: 'P2002',
+  RECORD_NOT_FOUND: 'P2025',
+  INVALID_DATA: 'P2014',
+} as const;
+
+export const AUTH_ERRORS = {
+  INVALID_CREDENTIALS: 'AUTH001',
+  TOKEN_EXPIRED: 'AUTH002',
+  INVALID_TOKEN: 'AUTH003',
+  UNAUTHORIZED: 'AUTH004',
+} as const;
+
+export const VALIDATION_ERRORS = {
+  INVALID_INPUT: 'VAL001',
+  MISSING_FIELD: 'VAL002',
+  INVALID_FORMAT: 'VAL003',
+} as const;
+
+export const BUSINESS_ERRORS = {
+  RESOURCE_NOT_FOUND: 'BUS001',
+  INSUFFICIENT_PERMISSIONS: 'BUS002',
+  INVALID_OPERATION: 'BUS003',
+} as const;
+
+
+// common/errors/error-handling.service.ts
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import * as ErrorCodes from './error-codes';
+import { DatabaseError, ValidationError } from './custom-errors';
+
+@Injectable()
+export class ErrorHandlingService {
+  private readonly logger = new Logger(ErrorHandlingService.name);
+
+  handleDatabaseError(error: Error, context: string): never {
+    this.logger.error(`Database error in ${context}:`, error.stack);
+
+    if (error instanceof PrismaClientKnownRequestError) {
+      switch (error.code) {
+        case ErrorCodes.DATABASE_ERRORS.UNIQUE_CONSTRAINT:
+          throw new DatabaseError('Unique constraint violation', {
+            fields: error.meta?.target,
+          });
+        case ErrorCodes.DATABASE_ERRORS.RECORD_NOT_FOUND:
+          throw new DatabaseError('Record not found');
+        case ErrorCodes.DATABASE_ERRORS.INVALID_DATA:
+          throw new DatabaseError('Invalid data provided');
+        default:
+          throw new DatabaseError('Database operation failed');
+      }
+    }
+
+    throw new DatabaseError('Unexpected database error');
+  }
+
+  handleValidationError(error: Error, context: string): never {
+    this.logger.error(`Validation error in ${context}:`, error.stack);
+    throw new ValidationError(error.message, {
+      code: ErrorCodes.VALIDATION_ERRORS.INVALID_INPUT,
+    });
+  }
+
+  handleAuthError(error: Error, context: string): never {
+    this.logger.error(`Authentication error in ${context}:`, error.stack);
+    throw new ValidationError(error.message, {
+      code: ErrorCodes.AUTH_ERRORS.INVALID_CREDENTIALS,
+    });
+  }
+
+  logError(error: Error, context: string): void {
+    this.logger.error(`Error in ${context}:`, error.stack, {
+      name: error.name,
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+
+// common/filters/global-exception.filter.ts
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
+import { Request, Response } from 'express';
+import { AppError } from '../errors/custom-errors';
+
+@Catch()
+export class GlobalExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(GlobalExceptionFilter.name);
+
+  catch(exception: Error, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message = 'Internal server error';
+    let code = 'INTERNAL_SERVER_ERROR';
+    let details = null;
+
+    if (exception instanceof AppError) {
+      status = exception.httpStatus;
+      message = exception.message;
+      code = exception.code;
+      details = exception.details;
+    } else if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      message = exception.message;
+    }
+
+    // Log the error
+    this.logger.error(`${request.method} ${request.url}`, {
+      error: exception,
+      stack: exception.stack,
+      body: request.body,
+      params: request.params,
+      query: request.query,
+    });
+
+    // Send response
+    response.status(status).json({
+      statusCode: status,
+      timestamp: new Date().toISOString(),
+      path: request.url,
+      method: request.method,
+      message,
+      code,
+      details,
+    });
+  }
+}
+
+
+// common/filters/http-exception.filter.ts
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
+import { Request, Response } from 'express';
+
+@Catch()
+export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger('HttpException');
+
+  catch(exception: Error, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
+
+    const status =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    const message =
+      exception instanceof HttpException
+        ? exception.message
+        : 'Internal server error';
+
+    const errorResponse = {
+      statusCode: status,
+      timestamp: new Date().toISOString(),
+      path: request.url,
+      method: request.method,
+      message: message,
+    };
+
+    this.logger.error(
+      `${request.method} ${request.url}`,
+      exception.stack,
+      'ExceptionFilter',
+    );
+
+    response.status(status).json(errorResponse);
+  }
+}
+
+
+// common/monitoring/circuit-breaker.service.ts
+import { Injectable, Logger } from '@nestjs/common';
+
+@Injectable()
+export class CircuitBreakerService {
+  private readonly logger = new Logger(CircuitBreakerService.name);
+  private state: Map<string, CircuitState> = new Map();
+
+  async executeWithBreaker<T>(
+    name: string,
+    operation: () => Promise<T>,
+    options: CircuitBreakerOptions = {},
+  ): Promise<T> {
+    if (this.isOpen(name)) {
+      throw new Error('Circuit is open');
+    }
+
+    try {
+      const result = await operation();
+      this.recordSuccess(name);
+      return result;
+    } catch (error) {
+      this.recordFailure(name);
+      throw error;
+    }
+  }
+
+  private isOpen(name: string): boolean {
+    const circuit = this.state.get(name);
+    if (!circuit) return false;
+
+    return (
+      circuit.failures >= circuit.threshold &&
+      Date.now() - circuit.lastFailure < circuit.resetTimeout
+    );
+  }
+
+  private recordSuccess(name: string) {
+    const circuit = this.state.get(name);
+    if (circuit) {
+      circuit.failures = 0;
+    }
+  }
+
+  private recordFailure(name: string) {
+    const circuit = this.state.get(name) || this.createCircuit(name);
+    circuit.failures++;
+    circuit.lastFailure = Date.now();
+    this.state.set(name, circuit);
+  }
+
+  private createCircuit(name: string): CircuitState {
+    return {
+      failures: 0,
+      threshold: 5,
+      resetTimeout: 60000,
+      lastFailure: 0,
+    };
+  }
+}
+
+interface CircuitState {
+  failures: number;
+  threshold: number;
+  resetTimeout: number;
+  lastFailure: number;
+}
+
+interface CircuitBreakerOptions {
+  threshold?: number;
+  resetTimeout?: number;
+}
+
+
+// common/monitoring/logger.service.ts
+import { ConsoleLogger, Injectable } from '@nestjs/common';
+import * as winston from 'winston';
+import 'winston-daily-rotate-file';
+
+@Injectable()
+export class CustomLoggerService extends ConsoleLogger {
+  private winston: winston.Logger;
+
+  constructor() {
+    super();
+    this.initializeWinston();
+  }
+
+  private initializeWinston() {
+    const fileFormat = winston.format.combine(winston.format.json());
+
+    this.winston = winston.createLogger({
+      level: 'info',
+      format: fileFormat,
+      transports: [
+        new winston.transports.DailyRotateFile({
+          filename: 'logs/error-%DATE%.log',
+          datePattern: 'YYYY-MM-DD',
+          level: 'error',
+          maxSize: '20m',
+          maxFiles: '14d',
+        }),
+        new winston.transports.DailyRotateFile({
+          filename: 'logs/combined-%DATE%.log',
+          datePattern: 'YYYY-MM-DD',
+          maxSize: '20m',
+          maxFiles: '14d',
+        }),
+      ],
+    });
+
+    if (process.env.NODE_ENV !== 'production') {
+      this.winston.add(
+        new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.simple(),
+          ),
+        }),
+      );
+    }
+  }
+
+  log(message: any, context?: string) {
+    this.winston.info(message, { context });
+    super.log(message, context);
+  }
+
+  error(message: any, stack?: string, context?: string) {
+    this.winston.error(message, { stack, context });
+    super.error(message, stack, context);
+  }
+
+  warn(message: any, context?: string) {
+    this.winston.warn(message, { context });
+    super.warn(message, context);
+  }
+
+  debug(message: any, context?: string) {
+    this.winston.debug(message, { context });
+    super.debug(message, context);
+  }
+
+  verbose(message: any, context?: string) {
+    this.winston.verbose(message, { context });
+    super.verbose(message, context);
+  }
+}
+
+
+// common/monitoring/metrics.service.ts
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as promClient from 'prom-client';
+
+@Injectable()
+export class MetricsService implements OnModuleInit {
+  private readonly register: promClient.Registry;
+  private httpRequestDuration: promClient.Histogram;
+  private httpRequestTotal: promClient.Counter;
+
+  constructor(private config: ConfigService) {
+    this.register = new promClient.Registry();
+    promClient.collectDefaultMetrics({ register: this.register });
+  }
+
+  onModuleInit() {
+    this.initializeMetrics();
+  }
+
+  private initializeMetrics() {
+    this.httpRequestDuration = new promClient.Histogram({
+      name: 'http_request_duration_seconds',
+      help: 'Duration of HTTP requests in seconds',
+      labelNames: ['method', 'route', 'status_code'],
+      buckets: [0.1, 0.5, 1, 2, 5],
+    });
+
+    this.httpRequestTotal = new promClient.Counter({
+      name: 'http_requests_total',
+      help: 'Total number of HTTP requests',
+      labelNames: ['method', 'route', 'status_code'],
+    });
+
+    this.register.registerMetric(this.httpRequestDuration);
+    this.register.registerMetric(this.httpRequestTotal);
+  }
+
+  recordHttpRequest(
+    method: string,
+    route: string,
+    statusCode: number,
+    duration: number,
+  ) {
+    this.httpRequestDuration
+      .labels(method, route, statusCode.toString())
+      .observe(duration);
+    this.httpRequestTotal.labels(method, route, statusCode.toString()).inc();
+  }
+
+  async getMetrics(): Promise<string> {
+    return this.register.metrics();
+  }
+}
+
+
+// common/monitoring/monitor.decorator.ts
+import { applyDecorators, SetMetadata } from '@nestjs/common';
+
+export function Monitor(options: { name: string; threshold?: number }) {
+  return applyDecorators(SetMetadata('monitor', options));
+}
+
+
+// common/monitoring/monitor.interceptor.ts
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+  Logger,
+} from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
+
+@Injectable()
+export class MonitoringInterceptor implements NestInterceptor {
+  private readonly logger = new Logger('APIMonitoring');
+
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const request = context.switchToHttp().getRequest();
+    const { method, path, ip, headers } = request;
+    const userAgent = headers['user-agent'] || 'unknown';
+    const startTime = Date.now();
+
+    return next.handle().pipe(
+      tap({
+        next: (response: any) => {
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+
+          this.logger.log({
+            type: 'API_CALL',
+            method,
+            path,
+            duration: `${duration}ms`,
+            ip,
+            userAgent,
+            userId: request.user?.id,
+            statusCode: context.switchToHttp().getResponse().statusCode,
+            timestamp: new Date().toISOString(),
+          });
+        },
+        error: (error: Error) => {
+          const endTime = Date.now();
+          const duration = endTime - startTime;
+
+          this.logger.error({
+            type: 'API_ERROR',
+            method,
+            path,
+            duration: `${duration}ms`,
+            ip,
+            userAgent,
+            userId: request.user?.id,
+            error: {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            },
+            timestamp: new Date().toISOString(),
+          });
+        },
+      }),
+    );
+  }
+}
+
+
+// common/monitoring/monitoring.module.ts
+import { Global, Module } from '@nestjs/common';
+import { MonitoringInterceptor } from './monitor.interceptor';
+import { PerformanceService } from './performance.service';
+import { CustomLoggerService } from './logger.service';
+
+@Global()
+@Module({
+  providers: [
+    MonitoringInterceptor,
+    PerformanceService,
+    CustomLoggerService,
+    {
+      provide: 'Logger',
+      useClass: CustomLoggerService,
+    },
+  ],
+  exports: [
+    MonitoringInterceptor,
+    PerformanceService,
+    CustomLoggerService,
+    'Logger',
+  ],
+})
+export class MonitoringModule {}
+
+
+// common/monitoring/performance.service.ts
+import { Injectable, Logger } from '@nestjs/common';
+import { performance } from 'perf_hooks';
+
+@Injectable()
+export class PerformanceService {
+  private readonly logger = new Logger('Performance');
+  private metrics: Map<string, number[]> = new Map();
+  private counters: Map<string, number> = new Map();
+  private gauges: Map<string, number> = new Map();
+
+  trackMetric(name: string, value: number) {
+    if (!this.metrics.has(name)) {
+      this.metrics.set(name, []);
+    }
+    this.metrics.get(name).push(value);
+  }
+
+  async measureAsync<T>(name: string, operation: () => Promise<T>): Promise<T> {
+    const start = performance.now();
+    try {
+      const result = await operation();
+      const duration = performance.now() - start;
+      this.trackMetric(name, duration);
+      return result;
+    } catch (error) {
+      const duration = performance.now() - start;
+      this.trackMetric(`${name}_error`, duration);
+      throw error;
+    }
+  }
+
+  private calculatePercentile(values: number[], percentile: number): number {
+    const sorted = [...values].sort((a, b) => a - b);
+    const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+    return sorted[index];
+  }
+
+  getMetricsSummary() {
+    const summary = {
+      timers: {},
+      counters: {},
+      gauges: {},
+    };
+
+    // Process timers
+    this.metrics.forEach((values, name) => {
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      summary.timers[name] = {
+        average: avg.toFixed(2),
+        min: Math.min(...values).toFixed(2),
+        max: Math.max(...values).toFixed(2),
+        count: values.length,
+        p95: this.calculatePercentile(values, 95).toFixed(2),
+      };
+    });
+
+    // Add counters and gauges
+    summary.counters = Object.fromEntries(this.counters);
+    summary.gauges = Object.fromEntries(this.gauges);
+
+    return summary;
+  }
+
+  incrementCounter(name: string) {
+    const current = this.counters.get(name) || 0;
+    this.counters.set(name, current + 1);
+  }
+
+  setGauge(name: string, value: number) {
+    this.gauges.set(name, value);
+  }
+
+  clearMetrics() {
+    this.metrics.clear();
+  }
+}
+
+
+// common/security/request-sanitizer.middleware.ts
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+import * as sanitizeHtml from 'sanitize-html';
+
+@Injectable()
+export class RequestSanitizerMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    if (req.body) {
+      this.sanitizeObject(req.body);
+    }
+
+    if (req.query) {
+      this.sanitizeObject(req.query);
+    }
+
+    if (req.params) {
+      this.sanitizeObject(req.params);
+    }
+
+    next();
+  }
+
+  private sanitizeObject(obj: any) {
+    Object.keys(obj).forEach((key) => {
+      if (typeof obj[key] === 'string') {
+        obj[key] = this.sanitizeInput(obj[key]);
+      } else if (typeof obj[key] === 'object') {
+        this.sanitizeObject(obj[key]);
+      }
+    });
+  }
+
+  private sanitizeInput(input: string): string {
+    return sanitizeHtml(input, {
+      allowedTags: [],
+      allowedAttributes: {},
+      disallowedTagsMode: 'recursiveEscape',
+    });
+  }
+}
+
+
+// common/security/security-headers.middleware.ts
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
+
+@Injectable()
+export class SecurityHeadersMiddleware implements NestMiddleware {
+  private readonly helmetMiddleware: any;
+
+  constructor() {
+    this.helmetMiddleware = helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          mediaSrc: ["'self'"],
+          frameSrc: ["'none'"],
+        },
+      },
+      crossOriginEmbedderPolicy: true,
+      crossOriginOpenerPolicy: true,
+      crossOriginResourcePolicy: { policy: 'same-origin' },
+      dnsPrefetchControl: true,
+      frameguard: { action: 'deny' },
+      hidePoweredBy: true,
+      hsts: true,
+      ieNoOpen: true,
+      noSniff: true,
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      xssFilter: true,
+    });
+  }
+
+  use(req: Request, res: Response, next: NextFunction) {
+    this.helmetMiddleware(req, res, next);
+  }
+}
+
+
+// config/configuration.ts
+/**
+ * Application configuration object.
+ * @returns {Object} Configuration object with various settings
+ */
+export default () => ({
+  port: parseInt(process.env.PORT, 10) || 3000,
+  jwt: {
+    secret: process.env.JWT_SECRET,
+    expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+  },
+  email: {
+    host: process.env.EMAIL_HOST,
+    port: parseInt(process.env.EMAIL_PORT, 10) || 587,
+    user: process.env.EMAIL_USER,
+    password: process.env.EMAIL_PASSWORD,
+  },
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  },
+});
+
+
+// health/health.controller.ts
+import { Controller, Get, Logger } from '@nestjs/common';
+import { HealthService } from './health.service';
+import { HealthStatus } from './types';
+
+@Controller('health')
+export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
+
+  constructor(private healthService: HealthService) {}
+
+  @Get()
+  async check(): Promise<
+    HealthStatus | { status: 'error'; error: string; timestamp: string }
+  > {
+    try {
+      const healthCheck = await this.healthService.checkHealth();
+      this.logger.debug('Health check completed', healthCheck);
+      return healthCheck;
+    } catch (error) {
+      this.logger.error('Health check failed', error.stack);
+      return {
+        status: 'error',
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      };
+    }
+  }
+}
+
+
+// health/health.module.ts
+import { Module } from '@nestjs/common';
+import { HealthController } from './health.controller';
+import { HealthService } from './health.service';
+import { PrismaModule } from '../prisma/prisma.module';
+import { RedisModule } from '../redis/redis.module';
+
+@Module({
+  imports: [PrismaModule, RedisModule],
+  controllers: [HealthController],
+  providers: [HealthService],
+  exports: [HealthService],
+})
+export class HealthModule {}
+
+
+// health/health.service.ts
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis/redis.service';
+import { HealthCheckResult, HealthStatus, MemoryHealthCheck } from './types';
+
+@Injectable()
+export class HealthService {
+  private readonly logger = new Logger(HealthService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private redis: RedisService,
+  ) {}
+
+  async checkHealth(): Promise<HealthStatus> {
+    const checks = {
+      database: await this.checkDatabase(),
+      redis: await this.checkRedis(),
+      memory: this.checkMemory(),
+      uptime: process.uptime(),
+    };
+
+    return {
+      status: this.determineOverallStatus(checks),
+      checks,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  private determineOverallStatus(checks: {
+    database: HealthCheckResult;
+    redis: HealthCheckResult;
+    memory: MemoryHealthCheck;
+    uptime: number;
+  }): 'ok' | 'error' {
+    const statuses = [checks.database, checks.redis, checks.memory];
+    return statuses.every((check) => check.status === 'ok') ? 'ok' : 'error';
+  }
+
+  private async checkDatabase(): Promise<HealthCheckResult> {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return { status: 'ok' };
+    } catch (error) {
+      this.logger.error('Database health check failed', error.stack);
+      return { status: 'error', error: error.message };
+    }
+  }
+
+  private async checkRedis(): Promise<HealthCheckResult> {
+    try {
+      await this.redis.set('health-check', 'ok', 10);
+      await this.redis.get('health-check');
+      return { status: 'ok' };
+    } catch (error) {
+      this.logger.error('Redis health check failed', error.stack);
+      return { status: 'error', error: error.message };
+    }
+  }
+
+  private checkMemory(): MemoryHealthCheck {
+    const used = process.memoryUsage();
+    return {
+      status: 'ok',
+      heap: Math.round(used.heapUsed / 1024 / 1024),
+      rss: Math.round(used.rss / 1024 / 1024),
+    };
+  }
+}
+
+
+// health/types.ts
+export interface HealthCheckResult {
+  status: 'ok' | 'error';
+  error?: string;
+}
+
+export interface MemoryHealthCheck {
+  status: 'ok';
+  heap: number;
+  rss: number;
+}
+
+export interface HealthStatus {
+  status: 'ok' | 'error';
+  checks: {
+    database: HealthCheckResult;
+    redis: HealthCheckResult;
+    memory: MemoryHealthCheck;
+    uptime: number;
+  };
+  timestamp: string;
+}
+
+
+// main.ts
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { ValidationPipe, Logger } from '@nestjs/common';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { CustomLoggerService } from './common/monitoring/logger.service';
+
+async function bootstrap() {
+  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create(AppModule, {
+    logger: new CustomLoggerService(),
+  });
+
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    credentials: true,
+  });
+
+  app.useGlobalFilters(new GlobalExceptionFilter());
+  app.useLogger(new CustomLoggerService());
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
+      disableErrorMessages: process.env.NODE_ENV === 'production',
+    }),
+  );
+
+  const port = process.env.PORT || 5000;
+  const host = process.env.HOST || '0.0.0.0';
+  await app.listen(port, host);
+  logger.log(`Application is running on: http://localhost:${port}`);
+}
+bootstrap();
+
+
+// modules/auth/auth.controller.ts
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
+} from '@nestjs/common';
+import { Request } from 'express';
+import { AuthService } from './services/auth.service';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { RequestResetDto, ResetPasswordDto } from './dto/password-reset.dto';
+import { Throttle } from '@nestjs/throttler';
+import { JwtAuthGuard } from './guard/jwt-auth.guard';
+import { SessionService } from './services/session.service';
+import { SessionGuard } from './guard/session.guard';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
+import { ResendVerificationDto, VerifyEmailDto } from './dto/verifiy-email.dto';
+import { DeviceService } from './services/device.service';
+import { Enable2FADto, Verify2FADto } from './dto/2fa.dto';
+import { TwoFactorService } from './services/two-factor.service';
+import { LocationService } from './services/location.service';
+
+@Controller('auth')
+export class AuthController {
+  constructor(
+    private authService: AuthService,
+    private sessionService: SessionService,
+    private performanceService: PerformanceService,
+    private deviceService: DeviceService,
+    private twoFactorService: TwoFactorService,
+    private locationService: LocationService,
+  ) {}
+
+  @Get('devices')
+  @UseGuards(JwtAuthGuard)
+  async getUserDevices(@Req() req: Request & { user: any }) {
+    return this.deviceService.getUserDevices(req.user.id);
+  }
+
+  @Post('devices/:deviceId/trust')
+  @UseGuards(JwtAuthGuard)
+  async trustDevice(
+    @Param('deviceId') deviceId: string,
+    @Req() req: Request & { user: any },
+  ) {
+    await this.deviceService.setDeviceTrusted(deviceId, req.user.id, true);
+    return { message: 'Device trusted successfully' };
+  }
+
+  @Delete('devices/:deviceId')
+  @UseGuards(JwtAuthGuard)
+  async removeDevice(
+    @Param('deviceId') deviceId: string,
+    @Headers('session-id') currentSessionId: string,
+    @Req() req: Request & { user: any },
+  ) {
+    // Check if trying to remove current device
+    const currentSession =
+      await this.sessionService.getSession(currentSessionId);
+    if (currentSession?.deviceId === deviceId) {
+      throw new BadRequestException('Cannot remove currently active device');
+    }
+
+    await this.deviceService.removeDevice(deviceId, req.user.id);
+    const revokedSessions = await this.sessionService.revokeDeviceSessions(
+      req.user.id,
+      deviceId,
+    );
+
+    return {
+      message: 'Device removed successfully',
+      sessionsRevoked: revokedSessions,
+    };
+  }
+
+  @Get('metrics')
+  @UseGuards(JwtAuthGuard)
+  async getMetrics() {
+    const metrics = this.performanceService.getMetricsSummary();
+    return {
+      metrics,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
+
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  login(@Body() loginDto: LoginDto, @Req() request: Request) {
+    return this.authService.login({
+      loginDto,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] || 'unknown',
+    });
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, SessionGuard)
+  async logout(@Headers('session-id') sessionId: string) {
+    return this.authService.logout(sessionId);
+  }
+
+  @Post('password-reset/request')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 300000 } })
+  async requestPasswordReset(@Body() resetDto: RequestResetDto) {
+    return this.authService.requestPasswordReset(resetDto.email);
+  }
+
+  @Post('password-reset/reset')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() resetDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetDto);
+  }
+
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  async getSessions(@Req() req: Request & { user: any }) {
+    const sessions = await this.sessionService.getUserSessions(req.user.id);
+    return { sessions };
+  }
+
+  @Delete('sessions/:sessionId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async terminateSession(
+    @Param('sessionId') sessionId: string,
+    @Req() req: Request & { user: any },
+  ) {
+    const session = await this.sessionService.getSession(sessionId);
+    if (!session) {
+      throw new UnauthorizedException('Session not found');
+    }
+
+    if (session.userId !== req.user.id) {
+      throw new UnauthorizedException('Unauthorized to terminate this session');
+    }
+
+    await this.sessionService.destroySession(sessionId);
+    return { message: 'Session terminated successfully' };
+  }
+
+  @Delete('logout-all')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async terminateAllSessions(
+    @Headers('session-id') currentSessionId: string,
+    @Req() req: Request & { user: any },
+    @Body() body: { keepCurrentSession?: boolean },
+  ) {
+    const result = await this.authService.logoutAllDevices(
+      req.user.id,
+      body.keepCurrentSession ? currentSessionId : undefined,
+    );
+    return result;
+  }
+
+  @Post('extend-session')
+  @UseGuards(JwtAuthGuard, SessionGuard)
+  async extendUserSession(
+    @Headers('session-id') sessionId: string,
+    @Body() body: { duration?: number },
+  ) {
+    await this.sessionService.extendSession(sessionId, body.duration);
+    return { message: 'Session extended successfully' };
+  }
+
+  @Post('block')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async blockUser(
+    @Headers('session-id') currentSessionId: string,
+    @Req() req: Request & { user: any },
+    @Body() blockAccountId: string,
+  ) {
+    return this.authService.blockAccount(blockAccountId);
+  }
+
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+    return this.authService.verifyEmail(verifyEmailDto.token);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  async resendVerification(@Body() resendDto: ResendVerificationDto) {
+    return this.authService.resendVerificationEmail(resendDto.email);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentUser(@Req() req: Request & { user: any }) {
+    const { password, ...user } = req.user;
+    return user;
+  }
+
+  @Post('2fa/setup')
+  @UseGuards(JwtAuthGuard)
+  async setup2FA(@Req() req: Request & { user: any }) {
+    return this.twoFactorService.generateSecret(req.user.id);
+  }
+
+  @Post('2fa/enable')
+  @UseGuards(JwtAuthGuard)
+  async enable2FA(
+    @Req() req: Request & { user: any },
+    @Body() body: Enable2FADto,
+  ) {
+    const isValid = await this.twoFactorService.verifyToken(
+      req.user.id,
+      body.token,
+    );
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid 2FA token');
+    }
+    await this.twoFactorService.enable2FA(req.user.id);
+    return { message: '2FA enabled successfully' };
+  }
+
+  @Post('2fa/verify')
+  @UseGuards(JwtAuthGuard)
+  async verify2FA(
+    @Req() req: Request & { user: any },
+    @Body() body: Verify2FADto,
+  ) {
+    const isValid = await this.twoFactorService.verifyToken(
+      req.user.id,
+      body.token,
+    );
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid 2FA token');
+    }
+    return { message: '2FA verification successful' };
+  }
+
+  @Post('2fa/disable')
+  @UseGuards(JwtAuthGuard)
+  async disable2FA(@Req() req: Request & { user: any }) {
+    await this.twoFactorService.disable2FA(req.user.id);
+    return { message: '2FA disabled successfully' };
+  }
+}
+
+
+// modules/auth/auth.request.http
+### Authentication API Collection
+@baseUrl = http://localhost:5000
+@authToken = YOUR_ACCESS_TOKEN
+@sessionId = YOUR_SESSION_ID
+@emailToken = YOUR_EMAIL_TOKEN
+
+### Register a new user
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+    "email": "testuser@example.com",
+    "username": "testuser",
+    "password": "Password123!",
+    "firstName": "Test",
+    "lastName": "User"
+}
+
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "username": "testuser",
+    "password": "Password123!"
+}
+
+
+### Get Current User
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{authToken}}
+
+### Verify Email
+POST {{baseUrl}}/auth/verify-email
+Content-Type: application/json
+
+{
+    "token": "{{emailToken}}"
+}
+
+### Resend Verification Email
+POST {{baseUrl}}/auth/resend-verification
+Content-Type: application/json
+
+{
+    "email": "test@example.com"
+}
+
+### Request Password Reset
+POST {{baseUrl}}/auth/password-reset/request
+Content-Type: application/json
+
+{
+    "email": "test@example.com"
+}
+
+### Reset Password
+POST {{baseUrl}}/auth/password-reset/reset
+Content-Type: application/json
+
+{
+    "token": "TOKEN_FROM_EMAIL",
+    "password": "NewPassword123!"
+}
+
+### Logout
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+### Logout from all devices
+DELETE {{baseUrl}}/auth/logout-all
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+{
+    "keepCurrentSession": true
+}
+
+### Get User Sessions
+GET {{baseUrl}}/auth/sessions
+Authorization: Bearer {{authToken}}
+
+### Terminate Specific Session
+DELETE {{baseUrl}}/auth/sessions/SESSION_ID
+Authorization: Bearer {{authToken}}
+
+### Extend Session
+POST {{baseUrl}}/auth/extend-session
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+{
+    "duration": 3600
+}
+
+### Get User Devices
+GET {{baseUrl}}/auth/devices
+Authorization: Bearer {{authToken}}
+
+### Trust Device
+POST {{baseUrl}}/auth/devices/DEVICE_ID/trust
+Authorization: Bearer {{authToken}}
+
+### Remove Device
+DELETE {{baseUrl}}/auth/devices/DEVICE_ID
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+### Get Performance Metrics
+GET {{baseUrl}}/auth/metrics
+Authorization: Bearer {{authToken}}
+
+### Block Account
+POST {{baseUrl}}/auth/block
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+{
+    "blockAccountId": "USER_ID_TO_BLOCK"
+}
+
+
+// modules/auth/dto/2fa.dto.ts
+import { IsString, IsNotEmpty } from 'class-validator';
+
+export class Enable2FADto {
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+}
+
+export class Verify2FADto {
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+}
+
+
+// modules/auth/dto/login.dto.ts
+import { IsString, MinLength } from 'class-validator';
+
+export class LoginDto {
+  @IsString()
+  @MinLength(3)
+  username: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
+}
+
+
+// modules/auth/dto/password-reset.dto.ts
+import { IsEmail, IsString, MinLength, Matches } from 'class-validator';
+
+export class RequestResetDto {
+  @IsEmail()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  token: string;
+
+  @IsString()
+  @MinLength(8)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
+    message:
+      'Password must contain uppercase, lowercase, number and special character',
+  })
+  password: string;
+}
+
+
+// modules/auth/dto/register.dto.ts
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  IsOptional,
+  IsDate,
+  Matches,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class RegisterDto {
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(3)
+  username: string;
+
+  @IsString()
+  @MinLength(8)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, {
+    message:
+      'Password must contain uppercase, lowercase, number and special character',
+  })
+  password: string;
+
+  @IsString()
+  @IsOptional()
+  firstName?: string;
+
+  @IsString()
+  @IsOptional()
+  lastName?: string;
+
+  @IsDate()
+  @IsOptional()
+  @Type(() => Date)
+  birthDate?: Date;
+}
+
+
+// modules/auth/dto/verifiy-email.dto.ts
+import { IsString, IsNotEmpty } from 'class-validator';
+
+export class VerifyEmailDto {
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+}
+
+export class ResendVerificationDto {
+  @IsString()
+  @IsNotEmpty()
+  email: string;
+}
+
+
+// modules/auth/guard/jwt-auth.guard.ts
+import { Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {}
+
+
+// modules/auth/guard/session.guard.ts
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { SessionService } from '../services/session.service';
+
+@Injectable()
+export class SessionGuard implements CanActivate {
+  constructor(private sessionService: SessionService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const sessionId = request.headers['session-id'];
+
+    if (!sessionId) {
+      throw new UnauthorizedException('No session provided');
+    }
+
+    const session = await this.sessionService.getSession(sessionId);
+    if (!session) {
+      throw new UnauthorizedException('Invalid session');
+    }
+
+    request.session = session;
+    return true;
+  }
+}
+
+
+// modules/auth/middleware/rate-limit.middleware.ts
+import {
+  Injectable,
+  NestMiddleware,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+import { RedisService } from 'src/redis/redis.service';
+
+@Injectable()
+export class RateLimitMiddleware implements NestMiddleware {
+  constructor(private readonly redisService: RedisService) {}
+
+  async use(req: Request, res: Response, next: NextFunction) {
+    const ip = req.ip;
+    const key = `rateLimit:${ip}`;
+    const limit = 100;
+    const window = 60 * 15;
+
+    const current = await this.redisService.get(key);
+
+    if (!current) {
+      await this.redisService.set(key, '1', window);
+      next();
+      return;
+    }
+
+    const count = parseInt(current);
+    if (count > limit) {
+      throw new HttpException(
+        'Too many requests',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    await this.redisService.set(key, (count + 1).toString(), window);
+    next();
+  }
+}
+
+
+// modules/auth/middleware/request-logger.middleware.ts
+import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+
+@Injectable()
+export class RequestLoggerMiddleware implements NestMiddleware {
+  private logger = new Logger('HTTP');
+
+  use(req: Request, res: Response, next: NextFunction) {
+    const { ip, method, originalUrl } = req;
+    const userAgent = req.get('user-agent') || '';
+
+    res.on('finish', () => {
+      const { statusCode } = res;
+      const contentLength = res.get('content-length');
+
+      this.logger.log(
+        `${method} ${originalUrl} ${statusCode} ${contentLength} - ${userAgent} ${ip}`,
+      );
+    });
+
+    next();
+  }
+}
+
+
+// modules/auth/middleware/session.middleware.ts
+import {
+  Injectable,
+  NestMiddleware,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+import { SessionService } from '../services/session.service';
+
+@Injectable()
+export class SessionMiddleware implements NestMiddleware {
+  constructor(private readonly sessionService: SessionService) {}
+
+  async use(req: Request, res: Response, next: NextFunction) {
+    const sessionId = req.headers['session-id'] as string;
+
+    if (!sessionId) {
+      return next();
+    }
+
+    const session = await this.sessionService.getSession(sessionId);
+    if (!session) {
+      throw new UnauthorizedException('Invalid session');
+    }
+
+    req['session'] = session;
+    next();
+  }
+}
+
+
+// modules/auth/module/auth.module.ts
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import { AuthController } from '../auth.controller';
+import { AuthService } from '../services/auth.service';
+import { JwtStrategy } from '../strategies/jwt.strategy';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { RedisModule } from 'src/redis/redis.module';
+import { SessionService } from '../services/session.service';
+import { MailModule } from '../../mail/mail.module';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
+import { DeviceService } from '../services/device.service';
+import { DeviceModule } from './device.module';
+import { TwoFactorService } from '../services/two-factor.service';
+import { LocationService } from '../services/location.service';
+
+@Module({
+  imports: [
+    RedisModule,
+    MailModule,
+    DeviceModule,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: {
+        expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+        issuer: 'nibblix.com',
+        audience: 'nibblix-clients',
+      },
+    }),
+  ],
+  controllers: [AuthController],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    PrismaService,
+    SessionService,
+    PerformanceService,
+    DeviceService,
+    LocationService,
+    TwoFactorService,
+  ],
+  exports: [AuthService, SessionService, DeviceService],
+})
+export class AuthModule {}
+
+
+// modules/auth/module/device.module.ts
+import { Module } from '@nestjs/common';
+import { DeviceService } from '../services/device.service';
+import { PrismaModule } from '../../../prisma/prisma.module';
+
+@Module({
+  imports: [PrismaModule],
+  providers: [DeviceService],
+  exports: [DeviceService],
+})
+export class DeviceModule {}
+
+
+// modules/auth/nibblix-auth.postman_collection.json
+{
+	"info": {
+		"_postman_id": "unique-id-here",
+		"name": "Nibblix Auth API",
+		"description": "Authentication endpoints for Nibblix",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "authToken",
+			"value": "your_token_here",
+			"type": "string"
+		},
+		{
+			"key": "sessionId",
+			"value": "your_session_id_here",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\",\n    \"username\": \"testuser\",\n    \"password\": \"Password123!\",\n    \"firstName\": \"Test\",\n    \"lastName\": \"User\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set(\"authToken\", jsonData.access_token);",
+									"pm.collectionVariables.set(\"sessionId\", jsonData.sessionId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testuser\",\n    \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/me",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "me"]
+						}
+					}
+				},
+				{
+					"name": "Verify Email",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"token\": \"TOKEN_FROM_EMAIL\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/verify-email",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "verify-email"]
+						}
+					}
+				},
+				{
+					"name": "Request Password Reset",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/password-reset/request",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "password-reset", "request"]
+						}
+					}
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"token\": \"TOKEN_FROM_EMAIL\",\n    \"password\": \"NewPassword123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/password-reset/reset",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "password-reset", "reset"]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "session-id",
+								"value": "{{sessionId}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/logout",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "logout"]
+						}
+					}
+				},
+				{
+					"name": "Logout All Devices",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "session-id",
+								"value": "{{sessionId}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"keepCurrentSession\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/logout-all",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "logout-all"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Sessions",
+			"item": [
+				{
+					"name": "Get User Sessions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/sessions",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "sessions"]
+						}
+					}
+				},
+				{
+					"name": "Extend Session",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "session-id",
+								"value": "{{sessionId}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"duration\": 3600\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/extend-session",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "extend-session"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Devices",
+			"item": [
+				{
+					"name": "Get User Devices",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/devices",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "devices"]
+						}
+					}
+				},
+				{
+					"name": "Trust Device",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/devices/:deviceId/trust",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "devices", ":deviceId", "trust"],
+							"variable": [
+								{
+									"key": "deviceId",
+									"value": "DEVICE_ID"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Remove Device",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{authToken}}"
+							},
+							{
+								"key": "session-id",
+								"value": "{{sessionId}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/auth/devices/:deviceId",
+							"host": ["{{baseUrl}}"],
+							"path": ["auth", "devices", ":deviceId"],
+							"variable": [
+								{
+									"key": "deviceId",
+									"value": "DEVICE_ID"
+								}
+							]
+						}
+					}
+				}
+			]
+		}
+	]
+}
+
+// modules/auth/services/auth.service.ts
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  Logger,
+  BadRequestException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as crypto from 'crypto';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { LoginDto } from '../dto/login.dto';
+import { RegisterDto } from '../dto/register.dto';
+import * as bcrypt from 'bcryptjs';
+import { SessionService } from './session.service';
+import { RedisService } from '../../../redis/redis.service';
+import { ResetPasswordDto } from '../dto/password-reset.dto';
+import { MailerService } from '../../mail/mail.service';
+import { v4 as uuidv4 } from 'uuid';
+import { addMinutes, differenceInMinutes } from 'date-fns';
+import { PerformanceService } from '../../../common/monitoring/performance.service';
+import { LocationService } from './location.service';
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private sessionService: SessionService,
+    private redisService: RedisService,
+    private mailerService: MailerService,
+    private performanceService: PerformanceService,
+    private locationService: LocationService,
+  ) {}
+
+  /**
+   * Region for Prisma queries
+   */
+
+  async createUser(data: {
+    username: string;
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    verificationToken?: string;
+    verificationExpiry?: Date;
+    isEmailVerified?: boolean;
+  }) {
+    const defaultRole = await this.getDefaultRole();
+    return this.prisma.user.create({
+      data: {
+        username: data.username,
+        email: data.email,
+        roleId: defaultRole.id,
+        password: data.password,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        verificationToken: data.verificationToken,
+        verificationExpiry: data.verificationExpiry,
+        isEmailVerified: false,
+      },
+      include: {
+        role: true,
+      },
+    });
+  }
+
+  async getDefaultRole() {
+    this.logger.debug('Getting default role');
+    const defaultRole = await this.prisma.role.findFirst({
+      where: {
+        name: 'user',
+      },
+    });
+    if (!defaultRole) {
+      this.logger.debug('Default role not found, creating one');
+      return this.prisma.role.create({
+        data: {
+          name: 'user',
+          permissions: {
+            create: {
+              name: 'read',
+            },
+          },
+        },
+      });
+    }
+    return defaultRole;
+  }
+
+  async addLoginAttempt(data: {
+    userId: string;
+    ipAddress: string;
+    userAgent: string;
+    success: boolean;
+  }) {
+    if (!data.userId) throw new Error('User id is required');
+    if (!data.ipAddress) throw new Error('IP Address is required');
+
+    const userExists = await this.checkIfUserExists({ id: data.userId });
+    if (!userExists) {
+      throw new Error('User does not exist');
+    }
+
+    return this.prisma.loginHistory.create({
+      data: {
+        userId: data.userId,
+        ipAddress: data.ipAddress,
+        userAgent: data.userAgent,
+        success: data.success,
+      },
+    });
+  }
+
+  async checkIfUserExists(data: {
+    username?: string;
+    email?: string;
+    id?: string;
+  }) {
+    return this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: data.email },
+          { username: data.username },
+          { id: data.id },
+        ],
+        deletedAt: null,
+      },
+    });
+  }
+
+  async getUser(data: { username?: string; email?: string; id?: string }) {
+    return this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: data.email },
+          { username: data.username },
+          { id: data.id },
+        ],
+        deletedAt: null,
+      },
+    });
+  }
+
+  /**
+   * End region
+   */
+
+  /**
+   * Region for Auth methods
+   */
+  async login(data: {
+    loginDto: LoginDto;
+    ipAddress: string;
+    userAgent: string;
+  }) {
+    return await this.performanceService.measureAsync('login', async () => {
+      try {
+        const user = await this.checkIfUserExists({
+          username: data.loginDto.username,
+          email: data.loginDto.username,
+        });
+
+        if (!user) {
+          this.performanceService.incrementCounter('failed_logins');
+          throw new UnauthorizedException(
+            'Account not found with these credentials',
+          );
+        }
+
+        if (user.deletedAt) {
+          this.performanceService.incrementCounter('failed_logins');
+          throw new UnauthorizedException(
+            'This account has been deactivated. Please contact support for assistance',
+          );
+        }
+
+        if (!user.isEmailVerified) {
+          throw new UnauthorizedException(
+            'Email verification required. Please check your email for verification instructions',
+          );
+        }
+
+        // Check if account is locked
+        if (user.accountLocked && user.lockExpires) {
+          if (user.lockExpires > new Date()) {
+            const remainingMinutes = differenceInMinutes(
+              user.lockExpires,
+              new Date(),
+            );
+            throw new UnauthorizedException(
+              `Account temporarily locked for security. Please try again in ${remainingMinutes} minutes`,
+            );
+          } else {
+            await this.resetFailedAttempts(user.id);
+          }
+        }
+
+        const isPasswordValid = await bcrypt.compare(
+          data.loginDto.password,
+          user.password,
+        );
+
+        if (!isPasswordValid) {
+          await this.handleFailedLogin(user);
+          throw new UnauthorizedException(
+            'Invalid credentials, please try again',
+          );
+        } else {
+          const isNewLocation = await this.locationService.isNewLoginLocation(
+            user.id,
+            data.ipAddress,
+          );
+
+          if (isNewLocation) {
+            const locationInfo = this.locationService.getLocationInfo(
+              data.ipAddress,
+            );
+            await this.mailerService.sendLoginAlert(user.email, {
+              ip: data.ipAddress,
+              browser: data.userAgent,
+              location: locationInfo,
+              time: new Date(),
+            });
+          }
+
+          // If 2FA is enabled, return a different response
+          if (user.twoFactorEnabled) {
+            return {
+              requires2FA: true,
+              tempToken: this.generateTempToken(user),
+            };
+          }
+        }
+
+        // Reset failed attempts on successful login
+        await this.resetFailedAttempts(user.id);
+
+        // Track successful logins
+        this.performanceService.incrementCounter('successful_logins');
+
+        // Track active sessions
+        this.performanceService.setGauge(
+          'active_sessions',
+          await this.sessionService
+            .getUserSessions(user.id)
+            .then((sessions) => sessions.length),
+        );
+
+        this.addLoginAttempt({
+          userId: user.id,
+          ipAddress: data.ipAddress,
+          userAgent: data.userAgent,
+          success: isPasswordValid,
+        });
+
+        const sessionId = await this.sessionService.createSession(user.id, {
+          ipAddress: data.ipAddress,
+          userAgent: data.userAgent,
+          lastActivity: new Date().toISOString(),
+        });
+
+        const token = this.generateToken(user);
+        return { ...token, sessionId };
+      } catch (error) {
+        this.logger.error('Login failed', error.stack);
+        throw error;
+      }
+    });
+  }
+
+  private generateTempToken(user: any) {
+    const payload = {
+      sub: user.id,
+      type: '2fa-pending',
+      exp: Math.floor(Date.now() / 1000) + 5 * 60,
+    };
+    return this.jwtService.sign(payload);
+  }
+
+  async checkPasswordHistory(
+    userId: string,
+    newPassword: string,
+  ): Promise<boolean> {
+    const recentPasswords = await this.prisma.passwordHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+
+    for (const historical of recentPasswords) {
+      if (await bcrypt.compare(newPassword, historical.password)) {
+        throw new BadRequestException(
+          'Password must be different from recent passwords, please choose a new one',
+        );
+      }
+    }
+
+    return true;
+  }
+
+  async savePasswordToHistory(
+    userId: string,
+    hashedPassword: string,
+  ): Promise<void> {
+    await this.prisma.passwordHistory.create({
+      data: {
+        userId,
+        password: hashedPassword,
+      },
+    });
+  }
+
+  async blockAccount(userId: string) {
+    //TODO: Update to use Permissions and Roles
+    return await this.performanceService.measureAsync(
+      'blockAccount',
+      async () => {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: {
+            deletedAt: new Date(),
+          },
+        });
+      },
+    );
+  }
+
+  async logoutAllDevices(
+    userId: string,
+    keepSessionId?: string,
+  ): Promise<{ message: string; sessionsTerminated: number }> {
+    return await this.performanceService.measureAsync(
+      'logoutAllDevices',
+      async () => {
+        const sessions = await this.sessionService.getUserSessions(userId);
+        let terminatedCount = 0;
+
+        for (const sessionId of sessions) {
+          if (!keepSessionId || sessionId !== keepSessionId) {
+            await this.sessionService.destroySession(sessionId);
+            terminatedCount++;
+          }
+        }
+
+        // Track metrics
+        this.performanceService.incrementCounter('mass_logout_events');
+        this.performanceService.setGauge(
+          'active_sessions_' + userId,
+          keepSessionId ? 1 : 0,
+        );
+
+        return {
+          message: keepSessionId
+            ? 'Logged out from all other devices'
+            : 'Logged out from all devices',
+          sessionsTerminated: terminatedCount,
+        };
+      },
+    );
+  }
+
+  private async handleFailedLogin(user: any) {
+    const MAX_ATTEMPTS = 8;
+    const LOCK_TIME = 15;
+
+    const attempts = (user.failedLoginAttempts || 0) + 1;
+    const updateData: any = {
+      failedLoginAttempts: attempts,
+      lastFailedLoginAttempt: new Date(),
+    };
+
+    if (attempts >= MAX_ATTEMPTS) {
+      updateData.accountLocked = true;
+      updateData.lockExpires = addMinutes(new Date(), LOCK_TIME);
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: updateData,
+    });
+
+    if (attempts >= MAX_ATTEMPTS) {
+      throw new UnauthorizedException(
+        `Account locked for ${LOCK_TIME} minutes due to too many failed attempts`,
+      );
+    }
+  }
+
+  private async resetFailedAttempts(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        failedLoginAttempts: 0,
+        accountLocked: false,
+        lockExpires: null,
+      },
+    });
+  }
+
+  async logout(sessionId: string) {
+    return await this.performanceService.measureAsync('logout', async () => {
+      await this.sessionService.destroySession(sessionId);
+      return { message: 'Logged out successfully' };
+    });
+  }
+
+  async logoutAll(userId: string) {
+    return await this.performanceService.measureAsync('logoutAll', async () => {
+      await this.sessionService.revokeAllUserSessions(userId);
+      return { message: 'Logged out of all sessions' };
+    });
+  }
+
+  async register(registerDto: RegisterDto) {
+    return await this.performanceService.measureAsync('register', async () => {
+      try {
+        this.logger.debug('Starting registration process');
+
+        const existingUser = await this.checkIfUserExists({
+          email: registerDto.email,
+          username: registerDto.username,
+        });
+
+        if (existingUser) {
+          this.performanceService.incrementCounter('duplicate_registrations');
+          if (existingUser.email === registerDto.email) {
+            throw new ConflictException('Email already in use');
+          }
+          if (existingUser.username === registerDto.username) {
+            throw new ConflictException(
+              'Username already in use, please choose another',
+            );
+          }
+        }
+        this.performanceService.incrementCounter('successful_registrations');
+        const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+        const verificationToken = uuidv4();
+        const verificationExpiry = addMinutes(new Date(), 15);
+
+        const user = await this.createUser({
+          username: registerDto.username,
+          email: registerDto.email,
+          password: hashedPassword,
+          firstName: registerDto.firstName,
+          lastName: registerDto.lastName,
+          verificationToken,
+          verificationExpiry,
+        });
+        await this.savePasswordToHistory(user.id, hashedPassword);
+
+        await this.mailerService.sendEmailVerification(
+          user.email,
+          verificationToken,
+        );
+
+        await this.mailerService.sendWelcome(user.email, user.username);
+        return this.generateToken(user);
+      } catch (error) {
+        this.logger.error('Registration error', error.stack);
+        throw error;
+      }
+    });
+  }
+
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { verificationToken: token },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid verification token');
+    }
+
+    if (user.isEmailVerified) {
+      return { message: 'Email already verified' };
+    }
+
+    if (user.verificationExpiry && new Date() > user.verificationExpiry) {
+      throw new UnauthorizedException('Verification token has expired');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isEmailVerified: true,
+        verificationToken: null,
+        verificationExpiry: null,
+      },
+    });
+
+    return { message: 'Email verified successfully' };
+  }
+
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // Return success even if user doesn't exist (security through obscurity)
+      return {
+        message:
+          'If your email is registered, a verification link has been sent',
+      };
+    }
+
+    if (user.isEmailVerified) {
+      return { message: 'Email already verified' };
+    }
+
+    // Generate new verification token
+    const verificationToken = uuidv4();
+    const verificationExpiry = addMinutes(new Date(), 15);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        verificationToken,
+        verificationExpiry,
+      },
+    });
+
+    await this.mailerService.sendEmailVerification(email, verificationToken);
+
+    return {
+      message: 'If your email is registered, a verification link has been sent',
+    };
+  }
+
+  async requestPasswordReset(email: string) {
+    return await this.performanceService.measureAsync(
+      'requestPasswordReset',
+      async () => {
+        try {
+          const user = await this.prisma.user.findUnique({ where: { email } });
+          if (!user) {
+            return {
+              message: 'If the email exists, a reset link has been sent',
+            };
+          }
+
+          const token = crypto.randomBytes(32).toString('hex');
+          await this.redisService.set(`pwd_reset:${token}`, user.id, 60 * 15);
+
+          await this.mailerService.sendPasswordReset(email, token);
+
+          return { message: 'If the email exists, a reset link has been sent' };
+        } catch (error) {
+          this.logger.error('Request Password Reset error', error.stack);
+          throw error;
+        }
+      },
+    );
+  }
+
+  async resetPassword(resetDto: ResetPasswordDto) {
+    return await this.performanceService.measureAsync(
+      'resetPassword',
+      async () => {
+        try {
+          const userId = await this.redisService.get(
+            `pwd_reset:${resetDto.token}`,
+          );
+          if (!userId) {
+            throw new UnauthorizedException('Invalid or expired reset token');
+          }
+
+          await this.checkPasswordHistory(userId, resetDto.password);
+
+          const hashedPassword = await bcrypt.hash(resetDto.password, 10);
+          await this.prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedPassword },
+          });
+          this.sessionService.revokeAllUserSessions(userId);
+          await this.savePasswordToHistory(userId, hashedPassword);
+
+          await this.redisService.del(`pwd_reset:${resetDto.token}`);
+          return { message: 'Password successfully reset' };
+        } catch (error) {
+          this.logger.error('Request Password Reset error', error.stack);
+          throw error;
+        }
+      },
+    );
+  }
+
+  private generateToken(user: any) {
+    const payload = {
+      sub: user.id,
+      username: user.username,
+      email: user.email,
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    };
+  }
+  /**
+   * End region
+   */
+}
+
+
+// modules/auth/services/device.service.ts
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { UAParser } from 'ua-parser-js';
+import * as crypto from 'crypto';
+
+export interface DeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  browserInfo: string;
+  osInfo: string;
+  deviceType: string;
+  isMobile: boolean;
+}
+
+@Injectable()
+export class DeviceService {
+  constructor(private prisma: PrismaService) {}
+
+  getDeviceInfo(userAgent: string): DeviceInfo {
+    const parser = new UAParser(userAgent);
+    const browser = parser.getBrowser();
+    const os = parser.getOS();
+    const device = parser.getDevice();
+
+    // Create a unique device ID from user agent and other factors
+    const deviceId = crypto
+      .createHash('md5')
+      .update(`${userAgent}${os.name}${browser.name}`)
+      .digest('hex');
+
+    return {
+      deviceId,
+      deviceName: `${browser.name} on ${os.name}`,
+      browserInfo: `${browser.name} ${browser.version || ''}`,
+      osInfo: `${os.name} ${os.version || ''}`,
+      deviceType: device.type || 'desktop',
+      isMobile: device.type === 'mobile',
+    };
+  }
+
+  async registerDevice(userId: string, userAgent: string): Promise<string> {
+    const deviceInfo = this.getDeviceInfo(userAgent);
+
+    const device = await this.prisma.userDevice.upsert({
+      where: { deviceId: deviceInfo.deviceId },
+      update: {
+        lastUsedAt: new Date(),
+        browser: deviceInfo.browserInfo,
+        os: deviceInfo.osInfo,
+      },
+      create: {
+        userId,
+        deviceId: deviceInfo.deviceId,
+        deviceName: deviceInfo.deviceName,
+        deviceType: deviceInfo.deviceType,
+        browser: deviceInfo.browserInfo,
+        os: deviceInfo.osInfo,
+      },
+    });
+
+    return device.deviceId;
+  }
+
+  async getUserDevices(userId: string) {
+    return this.prisma.userDevice.findMany({
+      where: { userId },
+      orderBy: { lastUsedAt: 'desc' },
+    });
+  }
+
+  async setDeviceTrusted(deviceId: string, userId: string, trusted: boolean) {
+    return this.prisma.userDevice.updateMany({
+      where: {
+        deviceId,
+        userId,
+      },
+      data: { isTrusted: trusted },
+    });
+  }
+
+  async removeDevice(deviceId: string, userId: string) {
+    return this.prisma.userDevice.deleteMany({
+      where: {
+        deviceId,
+        userId,
+      },
+    });
+  }
+}
+
+
+// modules/auth/services/location.service.ts
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service';
+import * as geoip from 'geoip-lite';
+
+@Injectable()
+export class LocationService {
+  constructor(private prisma: PrismaService) {}
+
+  async isNewLoginLocation(
+    userId: string,
+    ipAddress: string,
+  ): Promise<boolean> {
+    const geo = geoip.lookup(ipAddress);
+    if (!geo) return true;
+
+    const recentLogin = await this.prisma.loginHistory.findFirst({
+      where: {
+        userId,
+        ipAddress,
+        createdAt: {
+          gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+        },
+      },
+    });
+
+    return !recentLogin;
+  }
+
+  getLocationInfo(ipAddress: string) {
+    const geo = geoip.lookup(ipAddress);
+    return {
+      country: geo?.country || 'Unknown',
+      city: geo?.city || 'Unknown',
+      timezone: geo?.timezone || 'Unknown',
+    };
+  }
+}
+
+
+// modules/auth/services/session.service.ts
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { RedisService } from 'src/redis/redis.service';
+import { v4 as uuidv4 } from 'uuid';
+import { DeviceService } from './device.service';
+import { PerformanceService } from 'src/common/monitoring/performance.service';
+
+@Injectable()
+export class SessionService {
+  private readonly SESSION_PREFIX = 'session:';
+  private readonly SESSION_TTL = 24 * 60 * 60;
+  private readonly SESSION_REFRESH_THRESHOLD = 60 * 60;
+
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly deviceService: DeviceService,
+    private readonly performanceService: PerformanceService,
+  ) {}
+
+  async createSession(userId: string, metadata: any = {}): Promise<string> {
+    const deviceId = await this.deviceService.registerDevice(
+      userId,
+      metadata.userAgent,
+    );
+
+    const sessionData = {
+      userId,
+      deviceId,
+      createdAt: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+      ...metadata,
+    };
+
+    const sessionId = uuidv4();
+    await this.redisService.set(
+      `${this.SESSION_PREFIX}${sessionId}`,
+      JSON.stringify(sessionData),
+      this.SESSION_TTL,
+    );
+
+    return sessionId;
+  }
+
+  async getSession(sessionId: string): Promise<any | null> {
+    const data = await this.redisService.get(
+      `${this.SESSION_PREFIX}${sessionId}`,
+    );
+    if (!data) return null;
+
+    const session = JSON.parse(data);
+    const timeLeft = await this.redisService.ttl(
+      `${this.SESSION_PREFIX}${sessionId}`,
+    );
+
+    if (timeLeft < this.SESSION_REFRESH_THRESHOLD) {
+      await this.refreshSession(sessionId, session);
+    }
+
+    return session;
+  }
+
+  async revokeDeviceSessions(
+    userId: string,
+    deviceId: string,
+  ): Promise<number> {
+    const sessions = await this.getUserSessions(userId);
+    let revokedCount = 0;
+
+    for (const sessionId of sessions) {
+      const session = await this.getSession(sessionId);
+      if (session && session.deviceId === deviceId) {
+        await this.destroySession(sessionId);
+        revokedCount++;
+      }
+    }
+
+    // Track metric
+    this.performanceService.incrementCounter('device_sessions_revoked');
+
+    return revokedCount;
+  }
+
+  async getUserSessionsByDevice(
+    userId: string,
+    deviceId: string,
+  ): Promise<string[]> {
+    const sessions = await this.getUserSessions(userId);
+    const deviceSessions = [];
+
+    for (const sessionId of sessions) {
+      const session = await this.getSession(sessionId);
+      if (session && session.deviceId === deviceId) {
+        deviceSessions.push(sessionId);
+      }
+    }
+
+    return deviceSessions;
+  }
+
+  async refreshSession(sessionId: string, session: any): Promise<void> {
+    session.lastActivity = new Date().toISOString();
+    await this.redisService.set(
+      `${this.SESSION_PREFIX}${sessionId}`,
+      JSON.stringify(session),
+      this.SESSION_TTL,
+    );
+  }
+
+  async destroySession(sessionId: string): Promise<void> {
+    await this.trackSessionActivity(sessionId, 'session_destroyed');
+    await this.redisService.del(`${this.SESSION_PREFIX}${sessionId}`);
+    await this.redisService.del(
+      `${this.SESSION_PREFIX}${sessionId}:activities`,
+    );
+  }
+
+  async validateSession(sessionId: string, userId: string): Promise<boolean> {
+    const session = await this.getSession(sessionId);
+    return session?.userId === userId;
+  }
+
+  async getUserSessions(userId: string): Promise<string[]> {
+    const sessions = await this.redisService.keys(`${this.SESSION_PREFIX}*`);
+    const userSessions = [];
+
+    for (const session of sessions) {
+      const data = await this.redisService.get(session);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed.userId === userId) {
+          userSessions.push(session.replace(this.SESSION_PREFIX, ''));
+        }
+      }
+    }
+
+    return userSessions;
+  }
+
+  async revokeAllUserSessions(
+    userId: string,
+    exceptSessionId?: string,
+  ): Promise<void> {
+    const sessions = await this.getUserSessions(userId);
+
+    for (const sessionId of sessions) {
+      if (sessionId !== exceptSessionId) {
+        await this.destroySession(sessionId);
+      }
+    }
+  }
+
+  async extendSession(sessionId: string, duration?: number): Promise<void> {
+    const maxDuration = 7 * 24 * 60 * 60; // 7 days
+    const minDuration = 60 * 15; // 15 minutes
+
+    // Validate duration
+    if (duration) {
+      if (duration > maxDuration) {
+        throw new BadRequestException(
+          `Session duration cannot exceed ${maxDuration} seconds`,
+        );
+      }
+      if (duration < minDuration) {
+        throw new BadRequestException(
+          `Session duration must be at least ${minDuration} seconds`,
+        );
+      }
+    }
+
+    const session = await this.getSession(sessionId);
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const finalDuration = duration || this.SESSION_TTL;
+
+    await this.redisService.set(
+      `${this.SESSION_PREFIX}${sessionId}`,
+      JSON.stringify({ ...session, lastActivity: new Date().toISOString() }),
+      finalDuration,
+    );
+
+    await this.trackSessionActivity(sessionId, 'Session extended');
+  }
+
+  private async trackSessionActivity(
+    sessionId: string,
+    activity: string,
+  ): Promise<void> {
+    const session = await this.getSession(sessionId);
+    if (session) {
+      const activityLog = {
+        timestamp: new Date().toISOString(),
+        activity,
+        sessionId,
+        userId: session.userId,
+      };
+
+      await this.redisService.set(
+        `${this.SESSION_PREFIX}${sessionId}:activities`,
+        JSON.stringify(activityLog),
+        this.SESSION_TTL,
+      );
+    }
+  }
+}
+
+
+// modules/auth/services/two-factor.service.ts
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../../../prisma/prisma.service';
+import * as speakeasy from 'speakeasy';
+import * as QRCode from 'qrcode';
+
+@Injectable()
+export class TwoFactorService {
+  constructor(private prisma: PrismaService) {}
+
+  async generateSecret(userId: string) {
+    const secret = speakeasy.generateSecret({
+      name: `Nibblix (${process.env.APP_ENV || 'development'})`,
+    });
+
+    // Store the secret temporarily
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorSecret: secret.base32 },
+    });
+
+    // Generate QR code
+    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+    return {
+      secret: secret.base32,
+      qrCode: qrCodeUrl,
+    };
+  }
+
+  async verifyToken(userId: string, token: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { twoFactorSecret: true },
+    });
+
+    if (!user?.twoFactorSecret) {
+      return false;
+    }
+
+    return speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: token,
+      window: 1, // Allow 30 seconds window
+    });
+  }
+
+  async enable2FA(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorEnabled: true },
+    });
+  }
+
+  async disable2FA(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+      },
+    });
+  }
+}
+
+
+// modules/auth/strategies/jwt.strategy.ts
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { Strategy, ExtractJwt } from 'passport-jwt';
+import { PrismaService } from '../../../prisma/prisma.service';
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor(private prisma: PrismaService) {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      secretOrKey: process.env.JWT_SECRET || 'your-secret-key', // Move to env variables in production
+    });
+  }
+
+  async validate(payload: any) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: payload.sub,
+        deletedAt: null,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException();
+    }
+
+    delete user.password;
+    return user;
+  }
+}
+
+
+// modules/mail/mail.module.ts
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { MailerService } from './mail.service';
+import { RedisModule } from 'src/redis/redis.module';
+
+@Module({
+  imports: [ConfigModule, RedisModule],
+  providers: [MailerService],
+  exports: [MailerService],
+})
+export class MailModule {}
+
+
+// modules/mail/mail.service.ts
+import { Injectable, Logger } from '@nestjs/common';
+import * as nodemailer from 'nodemailer';
+import { ConfigService } from '@nestjs/config';
+import { RedisService } from 'src/redis/redis.service';
+import { convert } from 'html-to-text';
+
+export interface MailOptions {
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+}
+
+const ETHEREAL_CACHE_KEY = 'ethereal_account';
+const CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
+
+@Injectable()
+export class MailerService {
+  private transporter: nodemailer.Transporter;
+  private readonly logger = new Logger(MailerService.name);
+
+  constructor(
+    private configService: ConfigService,
+    private redisService: RedisService,
+  ) {}
+
+  async onModuleInit() {
+    await this.initializeTransporter();
+  }
+
+  private async initializeTransporter() {
+    try {
+      if (this.configService.get('NODE_ENV') === 'development') {
+        this.logger.debug('Initializing Ethereal Email transport');
+        const etherealAccount = await this.getOrCreateEtherealAccount();
+
+        if (etherealAccount) {
+          this.transporter = nodemailer.createTransport({
+            host: 'smtp.ethereal.email',
+            port: 587,
+            secure: false,
+            auth: {
+              user: etherealAccount.user,
+              pass: etherealAccount.pass,
+            },
+          });
+        } else {
+          throw new Error('Failed to initialize Ethereal account');
+        }
+      } else {
+        this.transporter = nodemailer.createTransport({
+          host: this.configService.get('SMTP_HOST'),
+          port: parseInt(this.configService.get('SMTP_PORT')),
+          secure: this.configService.get('SMTP_SECURE') === 'true',
+          auth: {
+            user: this.configService.get('SMTP_USER'),
+            pass: this.configService.get('SMTP_PASS'),
+          },
+        });
+      }
+
+      await this.transporter.verify();
+      this.logger.log('Mail transporter initialized successfully');
+    } catch (error) {
+      this.logger.error('Failed to initialize mail transporter:', error);
+      throw error;
+    }
+  }
+
+  async sendLoginAlert(
+    email: string,
+    data: {
+      ip: string;
+      browser: string;
+      location: {
+        country: string;
+        city: string;
+        timezone: string;
+      };
+      time: Date;
+    },
+  ) {
+    const html = `
+      <h2>New Login Detected</h2>
+      <p>We detected a new login to your account from an unrecognized device:</p>
+      <ul>
+        <li>Time: ${data.time.toLocaleString()}</li>
+        <li>Location: ${data.location.city}, ${data.location.country}</li>
+        <li>IP Address: ${data.ip}</li>
+        <li>Browser: ${data.browser}</li>
+      </ul>
+      <p>If this wasn't you, please change your password immediately and enable 2FA if you haven't already.</p>
+    `;
+
+    await this.transporter.sendMail({
+      to: email,
+      subject: 'New Login Alert',
+      html,
+    });
+  }
+
+  private async getOrCreateEtherealAccount(): Promise<any> {
+    try {
+      // Try to get cached account
+      const cachedAccount = await this.redisService.get(ETHEREAL_CACHE_KEY);
+
+      if (cachedAccount) {
+        const parsed = JSON.parse(cachedAccount);
+
+        // Verify cached credentials still work
+        try {
+          const testTransporter = nodemailer.createTransport({
+            host: 'smtp.ethereal.email',
+            port: 587,
+            secure: false,
+            auth: {
+              user: parsed.user,
+              pass: parsed.pass,
+            },
+          });
+          await testTransporter.verify();
+
+          this.logger.debug('Using cached Ethereal account');
+          return parsed;
+        } catch (e) {
+          this.logger.warn('Cached credentials invalid, creating new account');
+          await this.redisService.del(ETHEREAL_CACHE_KEY);
+        }
+      }
+
+      // Create new account if none cached
+      this.logger.debug('Creating new Ethereal account');
+      const testAccount = await nodemailer.createTestAccount();
+
+      if (testAccount) {
+        // Cache the new account
+        await this.redisService.set(
+          ETHEREAL_CACHE_KEY,
+          JSON.stringify(testAccount),
+          CACHE_TTL,
+        );
+        return testAccount;
+      }
+
+      throw new Error('Failed to create Ethereal account');
+    } catch (error) {
+      this.logger.error('Failed to get/create Ethereal account:', error);
+      return null;
+    }
+  }
+
+  async sendEmailVerification(email: string, token: string): Promise<boolean> {
+    const verificationLink = `${this.configService.get('FRONTEND_URL')}/verify-email?token=${token}`;
+
+    return this.sendMail({
+      to: email,
+      subject: 'Verify Your Email',
+      html: `
+        <h1>Verify Your Email Address</h1>
+        <p>Please click the link below to verify your email address:</p>
+        <a href="${verificationLink}">Verify Email</a>
+        <p>This link will expire in 15 minutes.</p>
+        <p>If you didn't create an account, please ignore this email.</p>
+      `,
+    });
+  }
+
+  async sendMail(options: MailOptions): Promise<boolean> {
+    try {
+      if (!this.transporter) {
+        await this.initializeTransporter();
+      }
+
+      const info = await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM') || 'noreply@nibblix.com',
+        ...options,
+      });
+
+      if (this.configService.get('NODE_ENV') === 'development') {
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        this.logger.debug('=============== EMAIL SENT ===============');
+        this.logger.debug(`Preview URL: ${previewUrl}`);
+        this.logger.debug(`MessageId: ${info.messageId}`);
+        this.logger.debug(`To: ${options.to}`);
+        this.logger.debug(`Subject: ${options.subject}`);
+        this.logger.debug('=======================================');
+      }
+
+      this.logger.log(`Email sent: ${info.messageId}`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to send email: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  // Helper method for password reset emails
+  async sendPasswordReset(email: string, token: string): Promise<boolean> {
+    const resetLink = `${this.configService.get('FRONTEND_URL')}/reset-password?token=${token}`;
+
+    return this.sendMail({
+      to: email,
+      subject: 'Password Reset Request',
+      html: `
+        <h1>Password Reset Request</h1>
+        <p>You requested to reset your password. Click the link below to proceed:</p>
+        <a href="${resetLink}">Reset Password</a>
+        <p>If you didn't request this, please ignore this email.</p>
+        <p>This link will expire in 30 minutes.</p>
+      `,
+    });
+  }
+
+  // Helper method for welcome emails
+  async sendWelcome(email: string, username: string): Promise<boolean> {
+    return this.sendMail({
+      to: email,
+      subject: 'Welcome to Nibblix',
+      html: `
+        <h1>Welcome to Nibblix, ${username}!</h1>
+        <p>Thank you for joining our platform. We're excited to have you on board!</p>
+        <p>If you have any questions, feel free to contact our support team.</p>
+      `,
+    });
+  }
+}
+
+
+// modules/middleware/middleware.module.ts
+import { Module } from '@nestjs/common';
+import { SessionMiddleware } from '../auth/middleware/session.middleware';
+import { RateLimitMiddleware } from '../auth/middleware/rate-limit.middleware';
+import { RequestLoggerMiddleware } from '../auth/middleware/request-logger.middleware';
+import { SessionService } from '../auth/services/session.service';
+import { RedisModule } from '../../redis/redis.module';
+import { DeviceModule } from '../auth/module/device.module';
+
+@Module({
+  imports: [RedisModule, DeviceModule],
+  providers: [
+    SessionMiddleware,
+    RateLimitMiddleware,
+    RequestLoggerMiddleware,
+    SessionService,
+  ],
+  exports: [SessionMiddleware, RateLimitMiddleware, RequestLoggerMiddleware],
+})
+export class MiddlewareModule {}
+
+
+// prisma/prisma.module.ts
+import { Global, Module } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+
+@Global()
+@Module({
+  providers: [PrismaService],
+  exports: [PrismaService],
+})
+export class PrismaModule {}
+
+
+// prisma/prisma.service.ts
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+
+@Injectable()
+export class PrismaService extends PrismaClient implements OnModuleInit {
+  private readonly logger = new Logger(PrismaService.name);
+
+  async onModuleInit() {
+    try {
+      await this.$connect();
+      this.logger.log('Successfully connected to database');
+
+      // Test the connection by running a simple query
+      await this.$queryRaw`SELECT 1`;
+      this.logger.log('Database connection verified');
+    } catch (error) {
+      this.logger.error('Failed to connect to database:', error);
+      throw error;
+    }
+  }
+}
+
+
+// redis/redis.module.ts
+import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
+import { RedisService } from './redis.service';
+import { redisStore } from 'cache-manager-redis-store';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+
+@Module({
+  imports: [
+    CacheModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        store: redisStore as any,
+        url: configService.get('REDIS_URL') || 'redis://redis:6379',
+        isGlobal: true,
+        ttl: 60 * 60 * 24, // 24 hours
+      }),
+      inject: [ConfigService],
+    }),
+  ],
+  providers: [RedisService],
+  exports: [RedisService, CacheModule],
+})
+export class RedisModule {}
+
+
+// redis/redis.service.ts
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
+
+@Injectable()
+export class RedisService {
+  constructor(@Inject(CACHE_MANAGER) private readonly cacheManager: Cache) {}
+
+  async get(key: string): Promise<any> {
+    return this.cacheManager.get(key);
+  }
+
+  async set(key: string, value: any, ttl: number): Promise<void> {
+    await this.cacheManager.set(key, value, ttl * 1000);
+  }
+
+  async del(key: string): Promise<void> {
+    await this.cacheManager.del(key);
+  }
+
+  async ttl(key: string): Promise<number> {
+    const client = (this.cacheManager.store as any).getClient();
+    return client.ttl(key);
+  }
+
+  async keys(pattern: string): Promise<string[]> {
+    const client = (this.cacheManager.store as any).getClient();
+    return client.keys(pattern);
+  }
+}
+
