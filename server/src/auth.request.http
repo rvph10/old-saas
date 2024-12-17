@@ -1,0 +1,119 @@
+### Authentication API Collection
+@baseUrl = http://localhost:5000
+@authToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxYzRmYTY0Yy0yYzNkLTQ5ZWYtODM2ZS05M2M2MzFhZWQ2MTYiLCJ1c2VybmFtZSI6InRlc3R1c2VyIiwiZW1haWwiOiJ0ZXN0dXNlckBleGFtcGxlLmNvbSIsImlhdCI6MTczNDQ0MzY5MSwiZXhwIjoxNzM1MDQ4NDkxLCJhdWQiOiJuaWJibGl4LWNsaWVudHMiLCJpc3MiOiJuaWJibGl4LmNvbSJ9.ZgJzag6c0EPpbn2_0gl01y32Noq4fAFih28Ic73Uprc
+@sessionId = 769310a3-7cc2-42d4-a6f4-1167081edde8
+@emailToken = a7e153a2-0703-40a0-a99d-ff7b6867e5f2
+### Register a new user
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+    "email": "testuser@example.com",
+    "username": "testuser",
+    "password": "daioUbdap09-0d0@dfa",
+    "firstName": "Test",
+    "lastName": "User"
+}
+
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+    "username": "testuser",
+    "password": "daioUbdap09-0d0@dfa"
+}
+
+### Get Current User
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{authToken}}
+
+### Verify Email
+POST {{baseUrl}}/auth/verify-email
+Content-Type: application/json
+
+{
+    "token": "{{emailToken}}"
+}
+
+### Resend Verification Email
+POST {{baseUrl}}/auth/resend-verification
+Content-Type: application/json
+
+{
+    "email": "test@example.com"
+}
+
+### Request Password Reset
+POST {{baseUrl}}/auth/password-reset/request
+Content-Type: application/json
+
+{
+    "email": "test@example.com"
+}
+
+### Reset Password
+POST {{baseUrl}}/auth/password-reset/reset
+Content-Type: application/json
+
+{
+    "token": "TOKEN_FROM_EMAIL",
+    "password": "NewPassword123!"
+}
+
+### Logout
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+### Logout from all devices
+DELETE {{baseUrl}}/auth/logout-all
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+{
+    "keepCurrentSession": false
+}
+
+### Get User Sessions
+GET {{baseUrl}}/auth/sessions
+Authorization: Bearer {{authToken}}
+
+### Terminate Specific Session
+DELETE {{baseUrl}}/auth/sessions/SESSION_ID
+Authorization: Bearer {{authToken}}
+
+### Extend Session
+POST {{baseUrl}}/auth/extend-session
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+{
+    "duration": 3600
+}
+
+### Get User Devices
+GET {{baseUrl}}/auth/devices
+Authorization: Bearer {{authToken}}
+
+### Trust Device
+POST {{baseUrl}}/auth/devices/DEVICE_ID/trust
+Authorization: Bearer {{authToken}}
+
+### Remove Device
+DELETE {{baseUrl}}/auth/devices/DEVICE_ID
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+### Get Performance Metrics
+GET {{baseUrl}}/auth/metrics
+Authorization: Bearer {{authToken}}
+
+### Block Account
+POST {{baseUrl}}/auth/block
+Authorization: Bearer {{authToken}}
+session-id: {{sessionId}}
+
+{
+    "blockAccountId": "USER_ID_TO_BLOCK"
+}

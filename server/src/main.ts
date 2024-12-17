@@ -1,5 +1,3 @@
-// server/src/main.ts
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -16,8 +14,14 @@ async function bootstrap() {
   const metricsService = app.get(MetricsService);
 
   app.enableCors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: [
+      'http://localhost:3000',
+      'http://client:3000',
+      process.env.CORS_ORIGIN
+    ].filter(Boolean),
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'session-id'],
   });
 
   app.useGlobalFilters(new GlobalExceptionFilter(metricsService));

@@ -9,8 +9,10 @@ services:
       - ./client:/app
       - /app/node_modules
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:5000
+      - NEXT_PUBLIC_API_URL=http://server:5000
       - NODE_ENV=development
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=your-super-secret-key
     depends_on:
       - server
     networks:
@@ -35,7 +37,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=your-super-secret-key-change-this
       - JWT_EXPIRES_IN=7d
-      - CORS_ORIGIN=http://localhost:3000
+      - CORS_ORIGIN=http://client:3000,http://localhost:3000
       - SMTP_HOST=smtp.ethereal.email
       - SMTP_PORT=587
       - SMTP_SECURE=false
