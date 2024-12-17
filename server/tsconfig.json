@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "module": "commonjs",
+    "moduleResolution": "node",
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -17,5 +18,14 @@
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false
-  }
+  },
+  "types": [
+    "babel__core",
+    "babel__generator",
+    "babel__template",
+    "babel__traverse",
+    "estree",
+    "json-schema",
+    "node"
+  ]
 }
