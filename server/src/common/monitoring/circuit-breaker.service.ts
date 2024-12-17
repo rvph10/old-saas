@@ -8,7 +8,6 @@ export class CircuitBreakerService {
   async executeWithBreaker<T>(
     name: string,
     operation: () => Promise<T>,
-    options: CircuitBreakerOptions = {},
   ): Promise<T> {
     if (this.isOpen(name)) {
       throw new Error('Circuit is open');
@@ -42,13 +41,13 @@ export class CircuitBreakerService {
   }
 
   private recordFailure(name: string) {
-    const circuit = this.state.get(name) || this.createCircuit(name);
+    const circuit = this.state.get(name) || this.createCircuit();
     circuit.failures++;
     circuit.lastFailure = Date.now();
     this.state.set(name, circuit);
   }
 
-  private createCircuit(name: string): CircuitState {
+  private createCircuit(): CircuitState {
     return {
       failures: 0,
       threshold: 5,
@@ -63,9 +62,4 @@ interface CircuitState {
   threshold: number;
   resetTimeout: number;
   lastFailure: number;
-}
-
-interface CircuitBreakerOptions {
-  threshold?: number;
-  resetTimeout?: number;
 }

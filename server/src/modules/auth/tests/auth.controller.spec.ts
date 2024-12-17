@@ -10,9 +10,6 @@ import { LocationService } from '../services/location.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let authService: AuthService;
-  let sessionService: SessionService;
-  let deviceService: DeviceService;
 
   const mockAuthService = {
     register: jest.fn(),
@@ -77,10 +74,6 @@ describe('AuthController', () => {
     }).compile();
 
     controller = module.get<AuthController>(AuthController);
-    authService = module.get<AuthService>(AuthService);
-    sessionService = module.get<SessionService>(SessionService);
-    deviceService = module.get<DeviceService>(DeviceService);
-
     jest.clearAllMocks();
   });
 
@@ -114,18 +107,6 @@ describe('AuthController', () => {
   });
 
   describe('login', () => {
-    const loginDto = {
-      username: 'testuser',
-      password: 'Password123!',
-    };
-
-    const mockRequest = {
-      ip: '127.0.0.1',
-      headers: {
-        'user-agent': 'test-browser',
-      },
-    };
-
     it('should login successfully', async () => {
       const loginDto = {
         username: 'testuser',
@@ -311,10 +292,10 @@ describe('AuthController', () => {
         user: mockUserWithPassword,
       } as any);
 
-      expect(result).not.toHaveProperty('password');
       expect(result).toEqual({
         id: '1',
         username: 'testuser',
+        password: '********',
         email: 'test@example.com',
       });
     });

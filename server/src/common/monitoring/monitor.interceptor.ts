@@ -20,7 +20,7 @@ export class MonitoringInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap({
-        next: (response: any) => {
+        next: () => {
           const endTime = Date.now();
           const duration = endTime - startTime;
 

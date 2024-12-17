@@ -11,7 +11,6 @@ jest.mock('qrcode');
 
 describe('TwoFactorService', () => {
   let service: TwoFactorService;
-  let prismaService: PrismaService;
 
   const mockPrismaService = {
     user: {
@@ -43,7 +42,6 @@ describe('TwoFactorService', () => {
     }).compile();
 
     service = module.get<TwoFactorService>(TwoFactorService);
-    prismaService = module.get<PrismaService>(PrismaService);
   });
 
   afterEach(() => {

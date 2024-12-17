@@ -247,7 +247,8 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@Req() req: Request & { user: any }) {
-    const { password, ...user } = req.user;
+    const { ...user } = req.user;
+    user.password = '********';
     return user;
   }
 

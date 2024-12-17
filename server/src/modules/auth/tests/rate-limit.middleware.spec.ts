@@ -6,7 +6,6 @@ import { HttpException } from '@nestjs/common';
 
 describe('RateLimitMiddleware', () => {
   let middleware: RateLimitMiddleware;
-  let redisService: RedisService;
 
   const mockRedisService = {
     get: jest.fn(),
@@ -46,7 +45,6 @@ describe('RateLimitMiddleware', () => {
     }).compile();
 
     middleware = module.get<RateLimitMiddleware>(RateLimitMiddleware);
-    redisService = module.get<RedisService>(RedisService);
 
     // Reset all mocks
     jest.clearAllMocks();

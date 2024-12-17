@@ -10,7 +10,6 @@ jest.mock('ua-parser-js');
 
 describe('DeviceService', () => {
   let service: DeviceService;
-  let prismaService: PrismaService;
 
   const mockPrismaService = {
     userDevice: {
@@ -56,7 +55,6 @@ describe('DeviceService', () => {
     }).compile();
 
     service = module.get<DeviceService>(DeviceService);
-    prismaService = module.get<PrismaService>(PrismaService);
 
     // Reset all mocks
     jest.clearAllMocks();

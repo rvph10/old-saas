@@ -6,13 +6,10 @@ import { PerformanceService } from '../../../common/monitoring/performance.servi
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 import { SessionError } from 'src/common/errors/custom-errors';
-import { ErrorCodes } from 'src/common/errors/error-codes';
 
 describe('SessionService', () => {
   let service: SessionService;
   let redisService: RedisService;
-  let deviceService: DeviceService;
-  let performanceService: PerformanceService;
 
   const mockRedisService = {
     set: jest.fn(),
@@ -65,8 +62,6 @@ describe('SessionService', () => {
 
     service = module.get<SessionService>(SessionService);
     redisService = module.get<RedisService>(RedisService);
-    deviceService = module.get<DeviceService>(DeviceService);
-    performanceService = module.get<PerformanceService>(PerformanceService);
 
     jest.clearAllMocks();
   });
@@ -129,7 +124,7 @@ describe('SessionService', () => {
           .map((_, i) => `session:${i}`),
       );
 
-      mockRedisService.get.mockImplementation((key) =>
+      mockRedisService.get.mockImplementation(() =>
         Promise.resolve(JSON.stringify({ userId, deviceId: 'device-1' })),
       );
 
@@ -152,7 +147,7 @@ describe('SessionService', () => {
         .map((_, i) => `session:${i}`);
       mockRedisService.keys.mockResolvedValueOnce(existingSessions);
 
-      mockRedisService.get.mockImplementation((key) =>
+      mockRedisService.get.mockImplementation(() =>
         Promise.resolve(JSON.stringify({ userId, deviceId: 'device-1' })),
       );
 
@@ -309,7 +304,7 @@ describe('SessionService', () => {
 
         expect(result).toBe(1);
         expect(redisService.del).toHaveBeenCalledTimes(2);
-        expect(performanceService.incrementCounter).toHaveBeenCalledWith(
+        expect(mockPerformanceService.incrementCounter).toHaveBeenCalledWith(
           'device_sessions_revoked',
         );
       });
@@ -384,7 +379,7 @@ describe('SessionService', () => {
         mockRedisService.keys.mockResolvedValue(
           mockSessions.map((s) => `session:${s}`),
         );
-        mockRedisService.get.mockImplementation((key) =>
+        mockRedisService.get.mockImplementation(() =>
           Promise.resolve(JSON.stringify({ userId })),
         );
 
@@ -401,7 +396,7 @@ describe('SessionService', () => {
         mockRedisService.keys.mockResolvedValue(
           mockSessions.map((s) => `session:${s}`),
         );
-        mockRedisService.get.mockImplementation((key) =>
+        mockRedisService.get.mockImplementation(() =>
           Promise.resolve(JSON.stringify({ userId })),
         );
 

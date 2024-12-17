@@ -3,13 +3,11 @@ import { LocationService } from '../services/location.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import * as geoip from 'geoip-lite';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
-import { ValidationError } from 'class-validator';
 
 jest.mock('geoip-lite');
 
 describe('LocationService', () => {
   let service: LocationService;
-  let prismaService: PrismaService;
 
   const mockPrismaService = {
     loginHistory: {
@@ -40,7 +38,6 @@ describe('LocationService', () => {
     }).compile();
 
     service = module.get<LocationService>(LocationService);
-    prismaService = module.get<PrismaService>(PrismaService);
   });
 
   afterEach(() => {

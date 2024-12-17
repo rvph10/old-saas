@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from 'src/redis/redis.service';
-import { convert } from 'html-to-text';
 
 export interface MailOptions {
   to: string;
@@ -122,8 +121,11 @@ export class MailerService {
 
           this.logger.debug('Using cached Ethereal account');
           return parsed;
-        } catch (e) {
-          this.logger.warn('Cached credentials invalid, creating new account');
+        } catch (error) {
+          this.logger.warn(
+            'Cached credentials invalid, creating new account',
+            error,
+          );
           await this.redisService.del(ETHEREAL_CACHE_KEY);
         }
       }

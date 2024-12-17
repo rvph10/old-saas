@@ -2,33 +2,24 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../services/auth.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import {
-  ConflictException,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../services/session.service';
 import { RedisService } from '../../../redis/redis.service';
 import { MailerService } from '../../mail/mail.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { addMinutes, subMinutes } from 'date-fns';
-import { isEmail } from 'class-validator';
 import { LocationService } from '../services/location.service';
-import { TwoFactorService } from '../services/two-factor.service';
 import { PasswordService } from '../services/password.service';
 import {
   AccountError,
   AuthenticationError,
   PasswordValidationError,
-  ValidationError,
 } from 'src/common/errors/custom-errors';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prismaService: PrismaService;
-  let jwtService: JwtService;
 
   const mockPrismaService = {
     user: {
@@ -61,13 +52,6 @@ describe('AuthService', () => {
     validatePassword: jest.fn(),
     validatePasswordStrength: jest.fn(),
     checkPasswordBreached: jest.fn(),
-  };
-
-  const mockTwoFactorService = {
-    generateSecret: jest.fn(),
-    verifyToken: jest.fn(),
-    enable2FA: jest.fn(),
-    disable2FA: jest.fn(),
   };
 
   const mockLocationService = {
@@ -104,13 +88,6 @@ describe('AuthService', () => {
     del: jest.fn(),
   };
 
-  const mockLogger = {
-    log: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
-    verbose: jest.fn(),
-  };
-
   const mockMailerService = {
     sendMail: jest.fn(),
     sendPasswordReset: jest.fn(),
@@ -135,8 +112,6 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    prismaService = module.get<PrismaService>(PrismaService);
-    jwtService = module.get<JwtService>(JwtService);
 
     mockSessionService.destroySession.mockClear();
     mockSessionService.getUserSessions.mockClear();
@@ -158,15 +133,13 @@ describe('AuthService', () => {
       updatedAt: new Date(),
     });
 
-    jest
-      .spyOn(service, 'checkIfUserExists')
-      .mockImplementation(async (data) => {
-        const result = await mockPrismaService.user.findFirst();
-        if (!result) {
-          return null;
-        }
-        return result;
-      });
+    jest.spyOn(service, 'checkIfUserExists').mockImplementation(async () => {
+      const result = await mockPrismaService.user.findFirst();
+      if (!result) {
+        return null;
+      }
+      return result;
+    });
   });
 
   afterEach(() => {
@@ -314,7 +287,6 @@ describe('AuthService', () => {
         ipAddress: '127.0.0.1',
         userAgent: 'test-agent',
       };
-      ('Password must be different from recent passwords, please choose a new one');
 
       it('should increment failed login attempts', async () => {
         const user = {
@@ -559,13 +531,6 @@ describe('AuthService', () => {
     const token = 'reset-token';
     const userId = 'user-id';
     const newPassword = 'NewPassword123!';
-    const registerDto = {
-      email: 'test@example.com',
-      username: 'testuser',
-      password: 'Password123!',
-      firstName: 'Test',
-      lastName: 'User',
-    };
 
     beforeEach(() => {
       mockPasswordService.validatePassword.mockReset();

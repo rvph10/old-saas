@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ConflictException,
-  Logger,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
