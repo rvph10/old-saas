@@ -1,7 +1,4 @@
-// server/src/common/monitoring/monitoring.module.ts
-
 import { Global, Module } from '@nestjs/common';
-import { MonitoringInterceptor } from './monitor.interceptor';
 import { PerformanceService } from './performance.service';
 import { CustomLoggerService } from './logger.service';
 import { MetricsService } from './metrics.service';
@@ -17,7 +14,6 @@ import { ConfigService } from '@nestjs/config';
       },
       inject: [ConfigService],
     },
-    MonitoringInterceptor,
     PerformanceService,
     CustomLoggerService,
     {
@@ -25,12 +21,6 @@ import { ConfigService } from '@nestjs/config';
       useClass: CustomLoggerService,
     },
   ],
-  exports: [
-    MetricsService,
-    MonitoringInterceptor,
-    PerformanceService,
-    CustomLoggerService,
-    'Logger',
-  ],
+  exports: [MetricsService, PerformanceService, CustomLoggerService, 'Logger'],
 })
 export class MonitoringModule {}

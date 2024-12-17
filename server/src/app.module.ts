@@ -23,6 +23,7 @@ import { MetricsService } from './common/monitoring/metrics.service';
 import { HealthModule } from './health/health.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ErrorModule } from './common/errors/error.module';
+import { RequestSanitizerMiddleware } from './common/security/request-sanitizer.middleware';
 
 @Module({
   imports: [
@@ -59,6 +60,8 @@ import { ErrorModule } from './common/errors/error.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestSanitizerMiddleware).forRoutes('*');
+
     consumer
       .apply(RateLimitMiddleware)
       .exclude('health', 'public', {
