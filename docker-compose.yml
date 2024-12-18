@@ -16,6 +16,7 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+    command: npm run dev
 
   server:
     build: 
