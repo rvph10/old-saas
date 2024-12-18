@@ -7,13 +7,14 @@ interface LogMessage {
   data?: any;
 }
 
-export class Logger {
+class Logger {
   private static instance: Logger;
   private logQueue: LogMessage[] = [];
   private readonly MAX_QUEUE_SIZE = 100;
+  private isInitialized = false;
 
   private constructor() {
-    window.addEventListener('unload', () => this.flush());
+    // Initialize in useEffect instead
   }
 
   static getInstance(): Logger {
@@ -21,6 +22,21 @@ export class Logger {
       Logger.instance = new Logger();
     }
     return Logger.instance;
+  }
+
+  initialize() {
+    if (this.isInitialized) return;
+    
+    if (typeof window !== 'undefined') {
+      const cleanup = () => this.flush();
+      window.addEventListener('unload', cleanup);
+      this.isInitialized = true;
+      
+      return () => {
+        window.removeEventListener('unload', cleanup);
+        this.isInitialized = false;
+      };
+    }
   }
 
   private log(level: LogLevel, message: string, data?: any) {
@@ -31,17 +47,14 @@ export class Logger {
       data,
     };
 
-    // Add to queue
-    this.logQueue.push(logMessage);
-
-    // Trim queue if it gets too large
-    if (this.logQueue.length > this.MAX_QUEUE_SIZE) {
-      this.logQueue.shift();
-    }
-
-    // Log to console in development
     if (process.env.NODE_ENV === 'development') {
       console[level](message, data);
+    }
+
+    this.logQueue.push(logMessage);
+
+    if (this.logQueue.length > this.MAX_QUEUE_SIZE) {
+      this.logQueue.shift();
     }
   }
 
@@ -67,14 +80,9 @@ export class Logger {
     });
   }
 
-  flush() {
-    // Here you could send logs to your backend or analytics service
+  private flush() {
     if (this.logQueue.length > 0) {
-      // Example: Send to backend
-      // fetch('/api/logs', {
-      //   method: 'POST',
-      //   body: JSON.stringify(this.logQueue),
-      // });
+      // Implement your log flushing logic here
       this.logQueue = [];
     }
   }

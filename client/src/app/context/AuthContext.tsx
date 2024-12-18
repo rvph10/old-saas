@@ -1,8 +1,10 @@
+'use client'
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LoginCredentials, RegisterData, User } from '@/types/auth';
 import { api } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
+import { toastService } from '@/lib/toast';
 
 interface AuthState {
   user: User | null;
@@ -33,25 +35,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const sessionId = localStorage.getItem('sessionId');
-
-      if (!token || !sessionId) {
-        setState({ user: null, isLoading: false, isAuthenticated: false });
-        return;
-      }
-
       const user = await api.get<User>('/auth/me');
       setState({
         user,
         isLoading: false,
         isAuthenticated: true,
-        sessionId,
       });
     } catch (error) {
       logger.error('Auth check failed', error);
-      localStorage.removeItem('token');
-      localStorage.removeItem('sessionId');
+      document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
       setState({ user: null, isLoading: false, isAuthenticated: false });
     }
   };
@@ -64,8 +56,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user: User
       }>('/auth/login', credentials);
       
-      localStorage.setItem('token', response.access_token);
-      localStorage.setItem('sessionId', response.sessionId);
+      // Set token as a cookie
+      document.cookie = `token=${response.access_token}; path=/; max-age=${24*60*60}`;
       
       setState({
         user: response.user,
@@ -73,10 +65,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: true,
         sessionId: response.sessionId,
       });
-  
+    
+      toastService.success('Successfully logged in!');
       router.push('/dashboard');
     } catch (error) {
       logger.error('Login failed', error);
+      toastService.error('Login failed. Please check your credentials.');
       throw error;
     }
   };
@@ -87,11 +81,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (sessionId) {
         await api.post('/auth/logout', { sessionId });
       }
+      toastService.success('Successfully logged out');
     } catch (error) {
       logger.error('Logout request failed', error);
+      toastService.error('Error during logout');
     } finally {
-      localStorage.removeItem('token');
-      localStorage.removeItem('sessionId');
+      document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
       setState({ user: null, isLoading: false, isAuthenticated: false });
       router.push('/login');
     }
@@ -100,12 +95,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (data: RegisterData) => {
     try {
       const response = await api.post<{ access_token: string; user: User }>('/auth/register', data);
-      
-      // After registration, automatically log in
-      await login({
-        username: data.username,
-        password: data.password,
-      });
     } catch (error) {
       logger.error('Registration failed', error);
       throw error;

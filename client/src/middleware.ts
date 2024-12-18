@@ -1,10 +1,21 @@
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get('token');
+  // Check for token in Authorization header or as a Bearer token
+  const authHeader = request.headers.get('authorization');
+  const token = authHeader?.split('Bearer ')[1] || 
+                request.cookies.get('token')?.value;
+
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth');
   const isApiRoute = request.nextUrl.pathname.startsWith('/api');
+  const isPublicPage = request.nextUrl.pathname === '/';
+
+  // Allow public pages without authentication
+  if (isPublicPage) {
+    return NextResponse.next();
+  }
 
   // Protect API routes
   if (isApiRoute && !token) {
@@ -31,13 +42,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
     '/((?!_next/static|_next/image|favicon.ico|public/).*)',
   ],
 };
