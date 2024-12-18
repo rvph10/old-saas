@@ -1,4 +1,6 @@
-FROM node:18-alpine
+FROM node:18.19-alpine3.18
+
+WORKDIR /app
 
 RUN apk add --no-cache \
     postgresql-client \
@@ -7,7 +9,6 @@ RUN apk add --no-cache \
     openssl \
     && rm -rf /var/cache/apk/*
 
-WORKDIR /app
 
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
