@@ -2,3 +2,8 @@ printFiles.js
 server/.prettierrc
 server/src/modules/auth/auth.request.http
 client/.prettierrc
+docker-compose.dev.yml
+docker-compose.rpi.yml
+.env
+.env.*
+!.env.example

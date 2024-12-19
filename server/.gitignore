@@ -56,3 +56,8 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 request.http
+docker-compose.dev.yml
+docker-compose.rpi.yml
+.env
+.env.*
+!.env.example

@@ -1,0 +1,26 @@
+services:
+  client:
+    build:
+      context: ./client
+      dockerfile: ../docker/client.dockerfile
+    ports:
+      - 3000:3000
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://YOUR_RPI_IP:5000
+      - NODE_ENV=development
+    command: sh -c "npm install && npm run dev"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge

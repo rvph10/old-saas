@@ -40,3 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 output.txt
+docker-compose.dev.yml
+docker-compose.rpi.yml
+.env
+.env.*
+!.env.example

@@ -11,12 +11,14 @@ export function middleware(request: NextRequest) {
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth');
   const isApiRoute = request.nextUrl.pathname.startsWith('/api');
   const isPublicPage = request.nextUrl.pathname === '/';
-
+  const isStaticAsset = request.nextUrl.pathname.match(/\.(ico|png|jpg|jpeg|svg)$/);
+  if (isStaticAsset) {
+    return NextResponse.next();
+  }
   // Allow public pages without authentication
   if (isPublicPage) {
     return NextResponse.next();
   }
-
   // Protect API routes
   if (isApiRoute && !token) {
     return NextResponse.json(
