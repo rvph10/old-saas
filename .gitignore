@@ -7,3 +7,4 @@ docker-compose.rpi.yml
 .env
 .env.*
 !.env.example
+docker-compose.yml
