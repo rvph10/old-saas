@@ -8,3 +8,6 @@ docker-compose.rpi.yml
 .env.*
 !.env.example
 docker-compose.yml
+sync-to-rpi.sh
+ssh-copy-id pi@192.168.129.200
+ssh-copy-id pi@192.168.129.200.pub
