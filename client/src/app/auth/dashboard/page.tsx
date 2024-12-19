@@ -1,4 +1,3 @@
-// src/app/dashboard/page.tsx
 "use client";
 
 import { LoggerProvider } from "@/components/providers/logger-provider";

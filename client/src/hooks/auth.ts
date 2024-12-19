@@ -10,8 +10,11 @@ export function useLogin() {
     mutationFn: authApi.login,
     onSuccess: (data) => {
       queryClient.setQueryData(['user'], data.user);
-      router.push('/dashboard');
+      //router.push('/dashboard');
     },
+    onError: (error) => {
+      console.error('Login error:', error);
+    }
   });
 }
 

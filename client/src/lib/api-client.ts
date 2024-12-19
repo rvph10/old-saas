@@ -1,18 +1,15 @@
-// src/lib/api-client.ts
-import axios from 'axios';
-import { getSession } from 'next-auth/react';
-import { Session } from 'next-auth';
+import axios, { AxiosError } from 'axios';
 
-interface LoginResponse {
-  accessToken: string;
+export interface AuthResponse {
+  access_token: string;
+  user: {
+    id: string;
+    username: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
   sessionId: string;
-  user: Session['user'];
-}
-
-interface ApiResponse<T> {
-  data: T;
-  message?: string;
-  status: number;
 }
 
 const apiClient = axios.create({
@@ -20,51 +17,46 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 });
 
-// Request interceptor for adding auth token
+// Request interceptor
 apiClient.interceptors.request.use(
   async (config) => {
-    try {
-      const session = await getSession();
-      
-      if (session?.accessToken) {
-        config.headers['Authorization'] = `Bearer ${session.accessToken}`;
-      }
-      
-      // Add session ID if available
-      if (typeof window !== 'undefined') {
-        const sessionId = localStorage.getItem('sessionId');
-        if (sessionId) {
-          config.headers['session-id'] = sessionId;
-        }
-      }
-
-      return config;
-    } catch (error) {
-      return Promise.reject(error);
+    // Get token from localStorage
+    const token = localStorage.getItem('access_token');
+    const sessionId = localStorage.getItem('sessionId');
+    
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
+    
+    if (sessionId) {
+      config.headers['session-id'] = sessionId;
+    }
+
+    return config;
   },
   (error) => {
     return Promise.reject(error);
   }
 );
 
-// Response interceptor for handling errors
+// Response interceptor
 apiClient.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  async (error: AxiosError) => {
     const originalRequest = error.config;
 
     // Handle 401 errors (unauthorized)
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      // Clear session and redirect to login
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('sessionId');
-        window.location.href = '/auth/login';
-      }
+    if (error.response?.status === 401 && originalRequest && !originalRequest?.headers['x-retry']) {
+      // Clear auth state
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('sessionId');
+      
+      // Redirect to login
+      window.location.href = '/auth/login';
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);
@@ -73,15 +65,40 @@ apiClient.interceptors.response.use(
 
 // Auth API
 export const authApi = {
-  login: async (credentials: { 
-    username: string; 
-    password: string; 
-  }): Promise<LoginResponse> => {
-    const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
-    if (response.data.sessionId && typeof window !== 'undefined') {
-      localStorage.setItem('sessionId', response.data.sessionId);
+  login: async (credentials: { username: string; password: string }): Promise<AuthResponse> => {
+    try {
+      const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
+      const { access_token, sessionId } = response.data;
+      
+      // Store auth data
+      if (access_token) {
+        localStorage.setItem('access_token', access_token);
+      }
+      if (sessionId) {
+        localStorage.setItem('sessionId', sessionId);
+      }
+      
+      return response.data;
+    } catch (error) {
+      // More detailed error handling
+      if (axios.isAxiosError(error)) {
+        // Specific error details from server
+        const serverErrorMessage = error.response?.data?.message;
+        
+        console.error('Login API error:', {
+          serverMessage: serverErrorMessage,
+          status: error.response?.status,
+          fullError: error
+        });
+  
+        // Throw a more informative error
+        throw new Error(serverErrorMessage || 'Login failed');
+      }
+      
+      // Generic error
+      console.error('Unexpected login error:', error);
+      throw error;
     }
-    return response.data;
   },
 
   register: async (data: {
@@ -90,46 +107,48 @@ export const authApi = {
     password: string;
     firstName?: string;
     lastName?: string;
-  }): Promise<ApiResponse<void>> => {
+  }) => {
     return apiClient.post('/auth/register', data);
   },
 
-  logout: async (): Promise<ApiResponse<{ message: string }>> => {
-    const response = await apiClient.post<ApiResponse<{ message: string }>>('/auth/logout');
-    if (typeof window !== 'undefined') {
+  logout: async () => {
+    try {
+      const response = await apiClient.post('/auth/logout');
+      // Clear auth data
+      localStorage.removeItem('access_token');
       localStorage.removeItem('sessionId');
+      return response.data;
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
     }
-    return response.data;
   },
 
-  verifyEmail: async (token: string): Promise<ApiResponse<{ message: string }>> => {
+  verifyEmail: async (token: string) => {
     return apiClient.post('/auth/verify-email', { token });
   },
 
-  requestPasswordReset: async (email: string): Promise<ApiResponse<{ message: string }>> => {
-    return apiClient.post('/auth/password-reset/request', { email });
-  },
-
-  resetPassword: async (token: string, password: string): Promise<ApiResponse<{ message: string }>> => {
-    return apiClient.post('/auth/password-reset/reset', { token, password });
-  },
-
-  getCurrentUser: async (): Promise<ApiResponse<Session['user']>> => {
+  getCurrentUser: async () => {
     return apiClient.get('/auth/me');
   },
 
-  getSessions: async (): Promise<ApiResponse<string[]>> => {
+  requestPasswordReset: async (email: string) => {
+    return apiClient.post('/auth/password-reset/request', { email });
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    return apiClient.post('/auth/password-reset/reset', { token, password });
+  },
+
+  getSessions: async () => {
     return apiClient.get('/auth/sessions');
   },
 
-  terminateSession: async (sessionId: string): Promise<ApiResponse<void>> => {
+  terminateSession: async (sessionId: string) => {
     return apiClient.delete(`/auth/sessions/${sessionId}`);
   },
 
-  logoutAllDevices: async (keepCurrentSession: boolean = false): Promise<ApiResponse<{
-    message: string;
-    sessionsTerminated: number;
-  }>> => {
+  logoutAllDevices: async (keepCurrentSession: boolean = false) => {
     return apiClient.delete('/auth/logout-all', {
       data: { keepCurrentSession },
     });
