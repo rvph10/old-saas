@@ -9,3 +9,4 @@ docker-compose.rpi.yml
 !.env.example
 docker-compose.yml
 sync-to-rpi.sh
+client/output.txt
