@@ -19,22 +19,3 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
-
-.Toastify__toast {
-  border-radius: 8px;
-  font-family: inherit;
-}
-
-.Toastify__toast-theme--light {
-  background: #ffffff;
-  color: #1a1a1a;
-}
-
-.Toastify__toast-theme--dark {
-  background: #1a1a1a;
-  color: #ffffff;
-}
-
-.Toastify__progress-bar {
-  height: 3px;
-}
