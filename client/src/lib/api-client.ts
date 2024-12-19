@@ -1,5 +1,6 @@
 import { ApiError } from "./errors";
 import { httpClient } from "./http/client";
+import { logger } from "./logger";
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
@@ -66,19 +67,39 @@ export class ApiClient {
   }
 
   async get<T>(endpoint: string, config = {}): Promise<T> {
-    return httpClient.get<T>(endpoint, config);
+    try {
+      return httpClient.get<T>(endpoint, config);
+    } catch (error) {
+      logger.error(`API GET request failed for ${endpoint}`, error);
+      throw error;
+    }
   }
 
   async post<T>(endpoint: string, data?: unknown, config = {}): Promise<T> {
-    return httpClient.post<T>(endpoint, data, config);
+    try {
+      return httpClient.post<T>(endpoint, data, config);
+    } catch (error) {
+      logger.error(`API POST request failed for ${endpoint}`, error);
+      throw error;
+    }
   }
 
   async put<T>(endpoint: string, data?: unknown, config = {}): Promise<T> {
-    return httpClient.put<T>(endpoint, data, config);
+    try {
+      return httpClient.put<T>(endpoint, data, config);
+    } catch (error) {
+      logger.error(`API PUT request failed for ${endpoint}`, error);
+      throw error;
+    }
   }
 
   async delete<T>(endpoint: string, config = {}): Promise<T> {
-    return httpClient.delete<T>(endpoint, config);
+    try {
+      return httpClient.delete<T>(endpoint, config);
+    } catch (error) {
+      logger.error(`API DELETE request failed for ${endpoint}`, error);
+      throw error;
+    }
   }
 }
 

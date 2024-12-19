@@ -28,7 +28,9 @@ export const ErrorCodes = {
   UNKNOWN_ERROR: 'UNK_001',
 } as const;
 
-export type ErrorCode = 
-  | typeof ErrorCodes[keyof typeof ErrorCodes][keyof (typeof ErrorCodes)[keyof typeof ErrorCodes]]
-  | typeof ErrorCodes['NETWORK_ERROR']
-  | typeof ErrorCodes['UNKNOWN_ERROR'];
+type ValueOf<T> = T[keyof T];
+type FlattenObject<T> = T extends object 
+  ? ValueOf<{ [K in keyof T]: T[K] extends object ? ValueOf<T[K]> : T[K] }>
+  : never;
+
+export type ErrorCode = FlattenObject<typeof ErrorCodes>;

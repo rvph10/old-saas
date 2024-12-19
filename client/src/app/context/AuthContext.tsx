@@ -44,9 +44,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: true,
       });
     } catch (error) {
-      logger.error('Auth check failed', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      logger.error('Auth check failed', { error: errorMessage });
+
       document.cookie = 'token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-      setState({ user: null, isLoading: false, isAuthenticated: false });
+      setState({ 
+        user: null, 
+        isLoading: false, 
+        isAuthenticated: false 
+      });
     }
   };
 

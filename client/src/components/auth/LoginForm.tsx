@@ -5,6 +5,9 @@ import { useAuth } from '@/app/context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { showToast } from '@/lib/toast';
 import Link from 'next/link';
+import { ApiError } from '@/lib/errors';
+import { ErrorCodes } from '@/lib/error-codes';
+import { ResendVerificationEmail } from './ResendVerificationEmail';
 
 export function LoginForm() {
   const [formData, setFormData] = useState({
@@ -12,7 +15,8 @@ export function LoginForm() {
     password: '',
   });
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [emailNeedsVerification, setEmailNeedsVerification] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const { login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -27,6 +31,10 @@ export function LoginForm() {
       router.push(from);
       showToast('Logged in successfully', 'success');
     } catch (error) {
+      if (error instanceof ApiError && error.code === ErrorCodes.AUTH.EMAIL_NOT_VERIFIED) {
+        setEmailNeedsVerification(true);
+        setUnverifiedEmail(formData.username);
+      }
       console.error('Login error:', error);
       showToast(error instanceof Error ? error.message : 'Failed to login', 'error');
     } finally {
@@ -95,6 +103,14 @@ export function LoginForm() {
       >
         {isLoading ? 'Signing in...' : 'Sign in'}
       </button>
+      {emailNeedsVerification && (
+        <div className="mt-4 p-4 bg-yellow-50 rounded-md">
+          <p className="text-yellow-700 mb-2">
+            Please verify your email address before logging in.
+          </p>
+          <ResendVerificationEmail email={unverifiedEmail} />
+        </div>
+      )}
     </form>
   );
 }

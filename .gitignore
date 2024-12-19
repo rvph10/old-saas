@@ -1,3 +1,4 @@
 printFiles.js
 server/.prettierrc
 server/src/modules/auth/auth.request.http
+client/.prettierrc

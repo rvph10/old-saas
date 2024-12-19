@@ -13,9 +13,7 @@ class Logger {
   private readonly MAX_QUEUE_SIZE = 100;
   private isInitialized = false;
 
-  private constructor() {
-    // Initialize in useEffect instead
-  }
+  private constructor() {}
 
   static getInstance(): Logger {
     if (!Logger.instance) {
@@ -39,22 +37,37 @@ class Logger {
     }
   }
 
-  private log(level: LogLevel, message: string, data?: any) {
-    const logMessage = {
-      level,
-      message,
-      timestamp: new Date().toISOString(),
-      data,
-    };
-
-    if (process.env.NODE_ENV === 'development') {
-      console[level](message, data);
+  private formatError(error: unknown): any {
+    if (error instanceof Error) {
+      return {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      };
     }
+    return error;
+  }
 
-    this.logQueue.push(logMessage);
+  private log(level: LogLevel, message: string, data?: any) {
+    try {
+      const logMessage = {
+        level,
+        message,
+        timestamp: new Date().toISOString(),
+        data: data ? this.formatError(data) : undefined,
+      };
 
-    if (this.logQueue.length > this.MAX_QUEUE_SIZE) {
-      this.logQueue.shift();
+      if (process.env.NODE_ENV === 'development') {
+        console[level](message, data);
+      }
+
+      this.logQueue.push(logMessage);
+
+      if (this.logQueue.length > this.MAX_QUEUE_SIZE) {
+        this.logQueue.shift();
+      }
+    } catch (err) {
+      console.error('Logging failed:', err);
     }
   }
 
@@ -70,20 +83,18 @@ class Logger {
     this.log('warn', message, data);
   }
 
-  error(message: string, error?: Error | unknown) {
-    this.log('error', message, {
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      } : error,
-    });
+  error(message: string, error?: unknown) {
+    this.log('error', message, error);
   }
 
   private flush() {
-    if (this.logQueue.length > 0) {
-      // Implement your log flushing logic here
-      this.logQueue = [];
+    try {
+      if (this.logQueue.length > 0) {
+        // Implement your log flushing logic here
+        this.logQueue = [];
+      }
+    } catch (err) {
+      console.error('Flush failed:', err);
     }
   }
 }
