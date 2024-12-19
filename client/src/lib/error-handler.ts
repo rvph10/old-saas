@@ -6,6 +6,7 @@ import {
   AuthenticationError,
   NetworkError,
 } from './errors';
+import { ErrorCode, ErrorCodes } from './error-codes';
 
 export interface ErrorHandlerOptions {
   silent?: boolean;
@@ -22,11 +23,10 @@ export class ErrorHandler {
 
     let normalizedError: AppError;
 
-    // Normalize the error
     if (error instanceof AppError) {
       normalizedError = error;
     } else if (error instanceof Error) {
-      normalizedError = new AppError(error.message, 'UNKNOWN_ERROR', {
+      normalizedError = new AppError(error.message, ErrorCodes.UNKNOWN_ERROR, {
         originalError: {
           name: error.name,
           stack: error.stack,
@@ -35,7 +35,7 @@ export class ErrorHandler {
     } else {
       normalizedError = new AppError(
         'An unknown error occurred',
-        'UNKNOWN_ERROR',
+        ErrorCodes.UNKNOWN_ERROR,
         { originalError: error }
       );
     }
@@ -109,7 +109,7 @@ export class ErrorHandler {
   }
 
   private static async handleRateLimit(error: ApiError): Promise<void> {
-    // Could implement retry logic or user feedback
+    // Use data property instead of retryAfter
     const retryAfter = error.data?.retryAfter || 60;
     logger.warn(`Rate limited. Retry after ${retryAfter} seconds`);
   }

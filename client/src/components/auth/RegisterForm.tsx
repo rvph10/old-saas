@@ -1,4 +1,3 @@
-// components/auth/RegisterForm.tsx
 'use client';
 
 import { useState } from 'react';
@@ -6,6 +5,10 @@ import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/lib/toast';
 import Link from 'next/link';
+import { ApiError } from '@/lib/errors';
+import { PasswordRequirements } from './PasswordRequirements';
+import { ErrorCode, ErrorCodes } from '@/lib/error-codes';
+import { logger } from '@/lib/logger';
 
 export function RegisterForm() {
   const [formData, setFormData] = useState({
@@ -15,6 +18,7 @@ export function RegisterForm() {
     firstName: '',
     lastName: '',
   });
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
   const { register } = useAuth();
@@ -23,14 +27,33 @@ export function RegisterForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
+  
     try {
       await register(formData);
       showToast('Registration successful! Please check your email to verify your account.', 'success');
       router.push('/auth/login');
     } catch (error) {
+      if (error instanceof ApiError && error.code) {
+        switch (error.code) {
+          case ErrorCodes.VALIDATION.INVALID_PASSWORD as ErrorCode:
+            showToast(
+              error.data?.errors?.join('\n') || 'Password validation failed',
+              'error'
+            );
+            console.log(error.data.errors[0]);
+            if (error.data?.errors) {
+            }
+            break;
+          case ErrorCodes.ACCOUNT.ALREADY_EXISTS as ErrorCode:
+            showToast('An account with this email or username already exists', 'error');
+            break;
+          default:
+            showToast(error.message, 'error');
+        }
+      } else {
+        showToast('Failed to register', 'error');
+      }
       console.error('Registration error:', error);
-      showToast(error instanceof Error ? error.message : 'Failed to register', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -118,11 +141,16 @@ export function RegisterForm() {
           id="password"
           name="password"
           required
+          onFocus={() => setShowPasswordRequirements(true)}
+          onBlur={() => setShowPasswordRequirements(false)}
           autoComplete="new-password"
           value={formData.password}
           onChange={handleChange}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
+        {showPasswordRequirements && (
+    <PasswordRequirements password={formData.password} />
+  )}
       </div>
 
       <div className="text-sm">

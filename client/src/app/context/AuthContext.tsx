@@ -5,6 +5,8 @@ import { LoginCredentials, RegisterData, User } from '@/types/auth';
 import { api } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 import { toastService } from '@/lib/toast';
+import { ApiError } from '@/lib/errors';
+import { ErrorCode, ErrorCodes } from '@/lib/error-codes';
 
 interface AuthState {
   user: User | null;
@@ -53,10 +55,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await api.post<{ 
         access_token: string; 
         sessionId: string; 
-        user: User
+        user: User 
       }>('/auth/login', credentials);
       
-      // Set token as a cookie
       document.cookie = `token=${response.access_token}; path=/; max-age=${24*60*60}`;
       
       setState({
@@ -69,8 +70,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toastService.success('Successfully logged in!');
       router.push('/dashboard');
     } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.code) {
+          switch (error.code) {
+            case ErrorCodes.AUTH.EMAIL_NOT_VERIFIED as ErrorCode:
+              toastService.error('Please verify your email before logging in.');
+              break;
+            case ErrorCodes.AUTH.INVALID_CREDENTIALS as ErrorCode:
+              toastService.error('Invalid username or password.');
+              break;
+            case ErrorCodes.AUTH.ACCOUNT_LOCKED as ErrorCode:
+              toastService.error(
+                `Account temporarily locked. ${
+                  error.data?.remainingMinutes 
+                    ? `Try again in ${error.data.remainingMinutes} minutes.`
+                    : ''
+                }`
+              );
+              break;
+            default:
+              toastService.error(error.message);
+          }
+        } else {
+          toastService.error(error.message);
+        }
+      }
       logger.error('Login failed', error);
-      toastService.error('Login failed. Please check your credentials.');
       throw error;
     }
   };

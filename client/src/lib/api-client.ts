@@ -52,6 +52,19 @@ export class ApiClient {
     return response.json();
   }
 
+  private async handleResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      const error = await response.json();
+      throw new ApiError(
+        error.message,
+        response.status,
+        error.code,
+        error.details
+      );
+    }
+    return response.json();
+  }
+
   async get<T>(endpoint: string, config = {}): Promise<T> {
     return httpClient.get<T>(endpoint, config);
   }
