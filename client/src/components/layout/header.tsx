@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useLogger } from "@/hooks/useLogger";
-import { LoggerProvider } from "@/components/providers/logger-provider";
+import { useLogger } from '@/hooks/useLogger';
+import { LoggerProvider } from '@/components/providers/logger-provider';
 
 export function Header() {
-  const logger = useLogger("Header");
+  const logger = useLogger('Header');
 
   return (
     <LoggerProvider componentName="Header">

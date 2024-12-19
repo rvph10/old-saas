@@ -14,7 +14,7 @@ export function useLogin() {
     },
     onError: (error) => {
       console.error('Login error:', error);
-    }
+    },
   });
 }
 

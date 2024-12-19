@@ -3,7 +3,10 @@ import { create } from 'zustand';
 interface ToastState {
   message: string | null;
   type: 'success' | 'error' | 'info' | 'warning' | null;
-  setToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  setToast: (
+    message: string,
+    type: 'success' | 'error' | 'info' | 'warning',
+  ) => void;
   clearToast: () => void;
 }
 

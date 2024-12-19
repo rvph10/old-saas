@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { LoggerProvider } from "@/components/providers/logger-provider";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { LoggerProvider } from '@/components/providers/logger-provider';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -13,13 +13,13 @@ export default function HomePage() {
           <div className="container mx-auto flex h-16 items-center justify-between px-4">
             <span className="text-2xl font-bold">Nibblix</span>
             <div className="flex items-center gap-4">
-              <Link 
-                href="/auth/login" 
+              <Link
+                href="/auth/login"
                 className="text-sm font-medium hover:text-gray-600"
               >
                 Login
               </Link>
-              <Link 
+              <Link
                 href="/auth/register"
                 className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
               >
@@ -37,8 +37,9 @@ export default function HomePage() {
                 Manage Your Restaurant with Ease
               </h1>
               <p className="mt-6 text-lg text-gray-600">
-                Streamline your operations, boost efficiency, and enhance customer experience 
-                with our comprehensive restaurant management system.
+                Streamline your operations, boost efficiency, and enhance
+                customer experience with our comprehensive restaurant management
+                system.
               </p>
               <div className="mt-10 flex justify-center gap-4">
                 <Link

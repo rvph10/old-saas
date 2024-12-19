@@ -11,7 +11,8 @@ class Logger {
 
   private constructor() {
     // Check if window is defined to ensure we're on client side
-    this.isDevelopment = typeof window !== 'undefined' && process.env.NODE_ENV === 'development';
+    this.isDevelopment =
+      typeof window !== 'undefined' && process.env.NODE_ENV === 'development';
   }
 
   static getInstance(): Logger {
@@ -21,19 +22,27 @@ class Logger {
     return Logger.instance;
   }
 
-  private formatMessage(message: string, level: LogLevel, options?: LoggerOptions): string {
+  private formatMessage(
+    message: string,
+    level: LogLevel,
+    options?: LoggerOptions,
+  ): string {
     const timestamp = options?.timestamp ? `[${new Date().toISOString()}]` : '';
     return `${timestamp} [${level.toUpperCase()}] ${message}`;
   }
 
-  private log(level: LogLevel, message: string | Error, options?: LoggerOptions) {
+  private log(
+    level: LogLevel,
+    message: string | Error,
+    options?: LoggerOptions,
+  ) {
     // Early return if we're not in browser or not in development
     if (!this.isDevelopment || typeof window === 'undefined') return;
 
     const formattedMessage = this.formatMessage(
       message instanceof Error ? message.message : message,
       level,
-      options
+      options,
     );
 
     switch (level) {

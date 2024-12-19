@@ -7,7 +7,7 @@ export const useLogger = (component: string) => {
       const componentMessage = `[${component}] ${message}`;
       logger[level](componentMessage, { timestamp: true });
     },
-    [component]
+    [component],
   );
 
   return {

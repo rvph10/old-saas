@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 
 export function LoggerProvider({
   children,
-  componentName
+  componentName,
 }: {
   children: React.ReactNode;
   componentName: string;

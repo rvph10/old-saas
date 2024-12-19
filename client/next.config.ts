@@ -16,7 +16,8 @@ const nextConfig: NextConfig = {
     pagesBufferLength: 2,
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
+    NEXT_PUBLIC_API_URL:
+      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
   },
   images: {
     remotePatterns: [
@@ -32,6 +33,6 @@ const nextConfig: NextConfig = {
       fullUrl: true,
     },
   },
-}
+};
 
 export default nextConfig;

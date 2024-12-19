@@ -1,26 +1,26 @@
-"use client";
+'use client';
 
-import { LoggerProvider } from "@/components/providers/logger-provider";
-import { 
-  Users, 
-  Utensils, 
-  Table, 
+import { LoggerProvider } from '@/components/providers/logger-provider';
+import {
+  Users,
+  Utensils,
+  Table,
   AlertCircle,
   TrendingUp,
   DollarSign,
   ShoppingCart,
-  Clock
-} from "lucide-react";
+  Clock,
+} from 'lucide-react';
 
 // Card Component
-function StatCard({ 
-  title, 
-  value, 
-  description, 
-  icon: Icon 
-}: { 
-  title: string; 
-  value: string | number; 
+function StatCard({
+  title,
+  value,
+  description,
+  icon: Icon,
+}: {
+  title: string;
+  value: string | number;
   description: string;
   icon: any;
 }) {
@@ -100,7 +100,10 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold">Recent Orders</h2>
             <div className="mt-4 space-y-4">
               {[1, 2, 3].map((order) => (
-                <div key={order} className="flex items-center justify-between border-b pb-4">
+                <div
+                  key={order}
+                  className="flex items-center justify-between border-b pb-4"
+                >
                   <div className="flex items-center gap-4">
                     <div className="rounded-full bg-gray-100 p-2">
                       <ShoppingCart className="h-4 w-4" />
@@ -121,7 +124,10 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold">Staff Activity</h2>
             <div className="mt-4 space-y-4">
               {[1, 2, 3].map((activity) => (
-                <div key={activity} className="flex items-center justify-between border-b pb-4">
+                <div
+                  key={activity}
+                  className="flex items-center justify-between border-b pb-4"
+                >
                   <div className="flex items-center gap-4">
                     <div className="rounded-full bg-gray-100 p-2">
                       <Clock className="h-4 w-4" />

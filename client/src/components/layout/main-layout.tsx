@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { LoggerProvider } from "@/components/providers/logger-provider";
-import { Header } from "./header";
-import { Sidebar } from "./sidebar";
+import { LoggerProvider } from '@/components/providers/logger-provider';
+import { Header } from './header';
+import { Sidebar } from './sidebar';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -19,11 +19,9 @@ export function MainLayout({ children }: MainLayoutProps) {
           {/* Main content area */}
           <div className="flex flex-1 flex-col">
             <Header />
-            
+
             {/* Page content */}
-            <main className="flex-1 p-6">
-              {children}
-            </main>
+            <main className="flex-1 p-6">{children}</main>
           </div>
         </div>
       </div>

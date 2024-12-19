@@ -26,11 +26,11 @@ apiClient.interceptors.request.use(
     // Get token from localStorage
     const token = localStorage.getItem('access_token');
     const sessionId = localStorage.getItem('sessionId');
-    
+
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
     if (sessionId) {
       config.headers['session-id'] = sessionId;
     }
@@ -39,7 +39,7 @@ apiClient.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor
@@ -49,27 +49,37 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
 
     // Handle 401 errors (unauthorized)
-    if (error.response?.status === 401 && originalRequest && !originalRequest?.headers['x-retry']) {
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest?.headers['x-retry']
+    ) {
       // Clear auth state
       localStorage.removeItem('access_token');
       localStorage.removeItem('sessionId');
-      
+
       // Redirect to login
-      window.location.href = '/auth/login';
+      //window.location.href = '/auth/login';
       return Promise.reject(error);
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 // Auth API
 export const authApi = {
-  login: async (credentials: { username: string; password: string }): Promise<AuthResponse> => {
+  login: async (credentials: {
+    username: string;
+    password: string;
+  }): Promise<AuthResponse> => {
     try {
-      const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
+      const response = await apiClient.post<AuthResponse>(
+        '/auth/login',
+        credentials,
+      );
       const { access_token, sessionId } = response.data;
-      
+
       // Store auth data
       if (access_token) {
         localStorage.setItem('access_token', access_token);
@@ -77,24 +87,24 @@ export const authApi = {
       if (sessionId) {
         localStorage.setItem('sessionId', sessionId);
       }
-      
+
       return response.data;
     } catch (error) {
       // More detailed error handling
       if (axios.isAxiosError(error)) {
         // Specific error details from server
         const serverErrorMessage = error.response?.data?.message;
-        
+
         console.error('Login API error:', {
           serverMessage: serverErrorMessage,
           status: error.response?.status,
-          fullError: error
+          fullError: error,
         });
-  
+
         // Throw a more informative error
         throw new Error(serverErrorMessage || 'Login failed');
       }
-      
+
       // Generic error
       console.error('Unexpected login error:', error);
       throw error;
