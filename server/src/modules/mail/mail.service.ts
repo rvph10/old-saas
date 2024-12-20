@@ -152,7 +152,7 @@ export class MailerService {
   }
 
   async sendEmailVerification(email: string, token: string): Promise<boolean> {
-    const verificationLink = `${this.configService.get('FRONTEND_URL')}/auth/verify-email?token=${token}`;
+    const verificationLink = `${this.configService.get('FRONTEND_URL')}/auth/verify/${token}`;
 
     return this.sendMail({
       to: email,

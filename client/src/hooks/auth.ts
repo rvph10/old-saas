@@ -76,8 +76,6 @@ export function useLogout() {
 }
 
 export function useVerifyEmail() {
-  const router = useRouter();
-
   return useMutation<any, Error, string>({
     mutationFn: async (token) => {
       const result = await Promise.race<any>([
@@ -86,8 +84,17 @@ export function useVerifyEmail() {
       ]);
       return result;
     },
-    onSuccess: () => {
-      router.push('/auth/login');
+  });
+}
+
+export function useResendVerification() {
+  return useMutation<any, Error, string>({
+    mutationFn: async (email) => {
+      const result = await Promise.race<any>([
+        authApi.resendVerification(email),
+        timeoutPromise(),
+      ]);
+      return result;
     },
   });
 }

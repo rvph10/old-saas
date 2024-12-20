@@ -49,9 +49,11 @@ export default function VerifyEmailPage() {
               <Button 
                 variant="link" 
                 className="p-0 pl-1"
-                //TODO: Implement resend email functionality
+                asChild
               >
-                Resend Verification
+                <Link href="/auth/verify-email/request">
+                  Resend Verification
+                </Link>
               </Button>
             </p>
           </div>

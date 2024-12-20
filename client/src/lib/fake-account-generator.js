@@ -19,7 +19,7 @@ export class FakeAccountGenerator {
     const uppercaseChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lowercaseChars = 'abcdefghijklmnopqrstuvwxyz';
     const numberChars = '0123456789';
-    const specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    const specialChars = '@$!%*?&-';
     
     const allChars = uppercaseChars + lowercaseChars + numberChars + specialChars;
     

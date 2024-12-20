@@ -45,6 +45,49 @@ apiClient.interceptors.request.use(
   },
 );
 
+apiClient.interceptors.request.use(
+  (config) => {
+    // Log the request in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('API Request:', {
+        method: config.method,
+        url: config.url,
+        data: config.data,
+      });
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (error.code === 'ECONNABORTED') {
+      console.error('Request timeout');
+      throw new Error('Request timeout: Server is not responding');
+    }
+    
+    if (!error.response) {
+      console.error('Network error:', error);
+      throw new Error('Network error: Please check your connection');
+    }
+
+    // Log the error in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('API Error:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        config: error.config,
+      });
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 // Response interceptor
 apiClient.interceptors.response.use(
   (response) => response,
@@ -153,6 +196,10 @@ export const authApi = {
 
   resetPassword: async (token: string, password: string) => {
     return apiClient.post('/auth/password-reset/reset', { token, password });
+  },
+
+  resendVerification: async (email: string) => {
+    return apiClient.post('/auth/resend-verification', { email });
   },
 
   getSessions: async () => {

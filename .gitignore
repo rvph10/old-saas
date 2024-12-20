@@ -12,3 +12,4 @@ sync-to-rpi.sh
 client/output.txt
 server/output.txt
 client/fake-accounts/accounts.json
+client/request.http

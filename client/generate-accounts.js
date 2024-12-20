@@ -1,4 +1,4 @@
-import { FakeAccountGenerator } from "./src/utils/fake-account-generator.js";
+import { FakeAccountGenerator } from "./src/lib/fake-account-generator.js";
 
 async function main() {
   const generator = new FakeAccountGenerator();
