@@ -3,6 +3,7 @@ import { authApi, AuthResponse } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { RegisterInput } from '@/lib/validations/auth';
 import axios from 'axios';
+import React from 'react';
 
 const TIMEOUT_DURATION = 10000;
 
@@ -152,14 +153,20 @@ export function useUser() {
       }
     },
     staleTime: 1000 * 60 * 5,
-    cacheTime: 1000 * 60 * 30,
-    onSuccess: (data: any) => {
-      if (data) {
-        queryClient.setQueryData(['user'], data);
-      }
-    },
+    gcTime: 1000 * 60 * 30,
     retry: false,
   });
+}
+
+export function useUserEffect() {
+  const queryClient = useQueryClient();
+  const { data } = useUser();
+
+  React.useEffect(() => {
+    if (data) {
+      queryClient.setQueryData(['user'], data);
+    }
+  }, [data, queryClient]);
 }
 
 export function useTerminateSession() {
