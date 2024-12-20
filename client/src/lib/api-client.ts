@@ -114,11 +114,13 @@ export const authApi = {
   register: async (data: {
     email: string;
     username: string;
+    confirmPassword: string;
     password: string;
     firstName?: string;
     lastName?: string;
   }) => {
-    return apiClient.post('/auth/register', data);
+    const {confirmPassword, ...apiData} = data;
+    return apiClient.post('/auth/register', apiData);
   },
 
   logout: async () => {

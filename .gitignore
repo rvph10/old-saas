@@ -11,3 +11,4 @@ docker-compose.yml
 sync-to-rpi.sh
 client/output.txt
 server/output.txt
+client/fake-accounts/accounts.json

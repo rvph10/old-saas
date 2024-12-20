@@ -10,7 +10,7 @@ export function useLogin() {
     mutationFn: authApi.login,
     onSuccess: (data) => {
       queryClient.setQueryData(['user'], data.user);
-      //router.push('/dashboard');
+      router.push('/dashboard');
     },
     onError: (error) => {
       console.error('Login error:', error);
@@ -25,6 +25,9 @@ export function useRegister() {
     mutationFn: authApi.register,
     onSuccess: () => {
       router.push('/auth/verify-email');
+    },
+    onError: (error) => {
+      console.error('Register error:', error);
     },
   });
 }

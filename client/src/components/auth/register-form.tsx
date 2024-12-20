@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useRegister } from '@/hooks/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -15,18 +16,24 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/hooks/use-toast';
+import { Icons } from '../icons';
 import Link from 'next/link';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 
 export function RegisterForm() {
+  const router = useRouter();
+  const { toast } = useToast();
   const register = useRegister();
-  const [error, setError] = useState<string>();
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       email: '',
       username: '',
+      confirmPassword: '',
       password: '',
       firstName: '',
       lastName: '',
@@ -35,10 +42,28 @@ export function RegisterForm() {
 
   async function onSubmit(data: RegisterInput) {
     try {
-      setError(undefined);
+      setIsLoading(true);
       await register.mutateAsync(data);
+      toast({
+        title: 'Registration Successful',
+        description: "Please check your email to verify your account.",
+        variant: 'success',
+        duration: 3000,
+      });
+
     } catch (error: any) {
-      setError(error?.response?.data?.message || 'Failed to register');
+      const errorMessage =
+        error.response?.data?.message ||
+        'Failed to register. Please try again.';
+  
+      toast({
+        title: 'Registration Failed',
+        description: errorMessage,
+        variant: 'destructive',
+        duration: 5000,
+      });
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -55,11 +80,6 @@ export function RegisterForm() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
           <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -68,7 +88,11 @@ export function RegisterForm() {
                 <FormItem>
                   <FormLabel>First name</FormLabel>
                   <FormControl>
-                    <Input placeholder="First name" {...field} />
+                    <Input
+                      placeholder="First name"
+                      {...field}
+                      disabled={isLoading}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -81,7 +105,11 @@ export function RegisterForm() {
                 <FormItem>
                   <FormLabel>Last name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Last name" {...field} />
+                    <Input
+                      placeholder="Last name"
+                      {...field}
+                      disabled={isLoading}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -99,6 +127,7 @@ export function RegisterForm() {
                     placeholder="Enter your email"
                     type="email"
                     {...field}
+                    disabled={isLoading}
                   />
                 </FormControl>
                 <FormMessage />
@@ -113,13 +142,16 @@ export function RegisterForm() {
               <FormItem>
                 <FormLabel>Username</FormLabel>
                 <FormControl>
-                  <Input placeholder="Choose a username" {...field} />
+                  <Input
+                    placeholder="Choose a username"
+                    {...field}
+                    disabled={isLoading}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-
           <FormField
             control={form.control}
             name="password"
@@ -127,22 +159,56 @@ export function RegisterForm() {
               <FormItem>
                 <FormLabel>Password</FormLabel>
                 <FormControl>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Create a password"
+                      {...field}
+                      disabled={isLoading}
+                      autoComplete="new-password"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <FiEyeOff className="h-4 w-4" />
+                      ) : (
+                        <FiEye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="confirmPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirm Password</FormLabel>
+                <FormControl>
                   <Input
-                    type="password"
-                    placeholder="Create a password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Confirm your password"
                     {...field}
+                    disabled={isLoading}
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={register.isPending}
-          >
-            {register.isPending ? 'Creating account...' : 'Create account'}
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading && (
+              <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            {isLoading ? 'Creating account...' : 'Create account'}
           </Button>
         </form>
       </Form>

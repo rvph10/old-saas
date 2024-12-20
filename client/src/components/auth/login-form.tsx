@@ -45,8 +45,6 @@ export function LoginForm() {
         variant: 'success',
         duration: 3000,
       });
-
-      //router.push('/dashboard');
     } catch (error: any) {
       // Prevent default form submission behavior
 
