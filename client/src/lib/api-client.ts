@@ -12,12 +12,15 @@ export interface AuthResponse {
   sessionId: string;
 }
 
+const TIMEOUT_DURATION = 10000;
+
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+  timeout: TIMEOUT_DURATION,
 });
 
 // Request interceptor

@@ -1,13 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { authApi } from '@/lib/api-client';
+import { authApi, AuthResponse } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
+import { RegisterInput } from '@/lib/validations/auth';
+
+const TIMEOUT_DURATION = 10000;
+
+const timeoutPromise = (): Promise<never> => {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('Request timeout: Server is not responding'));
+    }, TIMEOUT_DURATION);
+  });
+};
 
 export function useLogin() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: authApi.login,
+  return useMutation<AuthResponse, Error, { username: string; password: string }>({
+    mutationFn: async (credentials) => {
+      // Explicitly type the race result as AuthResponse
+      const result = await Promise.race<AuthResponse>([
+        authApi.login(credentials),
+        timeoutPromise(),
+      ]);
+      return result;
+    },
     onSuccess: (data) => {
       queryClient.setQueryData(['user'], data.user);
       router.push('/dashboard');
@@ -21,8 +39,14 @@ export function useLogin() {
 export function useRegister() {
   const router = useRouter();
 
-  return useMutation({
-    mutationFn: authApi.register,
+  return useMutation<any, Error, RegisterInput>({
+    mutationFn: async (data) => {
+      const result = await Promise.race<any>([
+        authApi.register(data),
+        timeoutPromise(),
+      ]);
+      return result;
+    },
     onSuccess: () => {
       router.push('/auth/verify-email');
     },
@@ -36,8 +60,14 @@ export function useLogout() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: authApi.logout,
+  return useMutation<any, Error, void>({
+    mutationFn: async () => {
+      const result = await Promise.race<any>([
+        authApi.logout(),
+        timeoutPromise(),
+      ]);
+      return result;
+    },
     onSuccess: () => {
       queryClient.clear();
       router.push('/auth/login');
@@ -48,8 +78,43 @@ export function useLogout() {
 export function useVerifyEmail() {
   const router = useRouter();
 
-  return useMutation({
-    mutationFn: authApi.verifyEmail,
+  return useMutation<any, Error, string>({
+    mutationFn: async (token) => {
+      const result = await Promise.race<any>([
+        authApi.verifyEmail(token),
+        timeoutPromise(),
+      ]);
+      return result;
+    },
+    onSuccess: () => {
+      router.push('/auth/login');
+    },
+  });
+}
+
+export function useRequestPasswordReset() {
+  return useMutation<any, Error, string>({
+    mutationFn: async (email) => {
+      const result = await Promise.race<any>([
+        authApi.requestPasswordReset(email),
+        timeoutPromise(),
+      ]);
+      return result;
+    },
+  });
+}
+
+export function useResetPassword() {
+  const router = useRouter();
+
+  return useMutation<any, Error, { token: string; password: string }>({
+    mutationFn: async ({ token, password }) => {
+      const result = await Promise.race<any>([
+        authApi.resetPassword(token, password),
+        timeoutPromise(),
+      ]);
+      return result;
+    },
     onSuccess: () => {
       router.push('/auth/login');
     },
@@ -60,46 +125,27 @@ export function useUser() {
   return useQuery({
     queryKey: ['user'],
     queryFn: async () => {
-      const response = await authApi.getCurrentUser();
-      return response.data;
+      const result = await Promise.race<any>([
+        authApi.getCurrentUser(),
+        timeoutPromise(),
+      ]);
+      return result.data;
     },
     retry: false,
-  });
-}
-
-export function useRequestPasswordReset() {
-  return useMutation({
-    mutationFn: authApi.requestPasswordReset,
-  });
-}
-
-export function useResetPassword() {
-  const router = useRouter();
-
-  return useMutation({
-    mutationFn: ({ token, password }: { token: string; password: string }) =>
-      authApi.resetPassword(token, password),
-    onSuccess: () => {
-      router.push('/auth/login');
-    },
-  });
-}
-
-export function useSessions() {
-  return useQuery({
-    queryKey: ['sessions'],
-    queryFn: async () => {
-      const response = await authApi.getSessions();
-      return response.data;
-    },
   });
 }
 
 export function useTerminateSession() {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: authApi.terminateSession,
+  return useMutation<any, Error, string>({
+    mutationFn: async (sessionId) => {
+      const result = await Promise.race<any>([
+        authApi.terminateSession(sessionId),
+        timeoutPromise(),
+      ]);
+      return result;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
     },
@@ -110,8 +156,14 @@ export function useLogoutAllDevices() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  return useMutation({
-    mutationFn: authApi.logoutAllDevices,
+  return useMutation<any, Error, void>({
+    mutationFn: async () => {
+      const result = await Promise.race<any>([
+        authApi.logoutAllDevices(),
+        timeoutPromise(),
+      ]);
+      return result;
+    },
     onSuccess: () => {
       queryClient.clear();
       router.push('/auth/login');
