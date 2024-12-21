@@ -175,6 +175,18 @@ export class SessionService {
     return session;
   }
 
+  async revokeToken(jti: string): Promise<void> {
+    await this.redisService.set(
+      `revoked_token:${jti}`,
+      'true',
+      24 * 60 * 60
+    );
+  }
+  
+  async isTokenRevoked(jti: string): Promise<boolean> {
+    return await this.redisService.get(`revoked_token:${jti}`) !== null;
+  }
+
   async revokeDeviceSessions(
     userId: string,
     deviceId: string,

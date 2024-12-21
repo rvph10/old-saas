@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Res,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './services/auth.service';
@@ -28,6 +29,8 @@ import { DeviceService } from './services/device.service';
 import { Enable2FADto, Verify2FADto } from './dto/2fa.dto';
 import { TwoFactorService } from './services/two-factor.service';
 import { LocationService } from './services/location.service';
+import { Response } from 'express';
+import * as cookieParser from 'cookie-parser';
 
 @Controller('auth')
 export class AuthController {
@@ -100,22 +103,67 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async login(
     @Body() loginDto: LoginDto,
     @Req() request: Request,
-    @Body('forceLogout') forceLogout?: boolean,
+    @Res({ passthrough: true }) response: Response
   ) {
-    return this.authService.login({
+    const result = await this.authService.login({
       loginDto,
       ipAddress: request.ip,
-      userAgent: request.headers['user-agent'] || 'unknown',
-      sessionOptions: {
-        forceLogoutOthers: forceLogout,
-        maxSessions: 5,
-      },
+      userAgent: request.headers['user-agent']
     });
+
+    // Handle 2FA case separately
+    if ('requires2FA' in result) {
+      return result; // Return early if 2FA is required
+    }
+
+    // Set cookies only if we have tokens
+    response.cookie('access_token', result.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      expires: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+    });
+
+    response.cookie('refresh_token', result.refresh_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/auth/refresh',
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    });
+
+    return { 
+      user: result.user,
+      sessionId: result.sessionId 
+    };
   }
+
+
+@Post('refresh')
+@HttpCode(HttpStatus.OK)
+async refresh(
+  @Req() request: Request,
+  @Res({ passthrough: true }) response: Response
+) {
+  const refreshToken = request.cookies['refresh_token'];
+  if (!refreshToken) {
+    throw new UnauthorizedException('No refresh token');
+  }
+
+  const result = await this.authService.refreshToken(refreshToken);
+  
+  response.cookie('access_token', result.access_token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    expires: new Date(Date.now() + 15 * 60 * 1000)
+  });
+
+  return { message: 'Token refreshed' };
+}
 
   @Post('sessions/cleanup')
   @UseGuards(JwtAuthGuard)

@@ -232,7 +232,7 @@ describe('MailerService', () => {
         expect(mockTransporter.sendMail).toHaveBeenCalledWith(
           expect.objectContaining({
             html: expect.stringContaining(
-              `${mockConfigService.get('FRONTEND_URL')}/verify-email?token=${token}`,
+              `${mockConfigService.get('FRONTEND_URL')}/auth/verify/${token}`,
             ),
           }),
         );

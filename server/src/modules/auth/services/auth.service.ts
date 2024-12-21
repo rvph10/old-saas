@@ -37,6 +37,24 @@ interface LoginParams {
   sessionOptions?: SessionOptions;
 }
 
+interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  user: {
+    id: string;
+    username: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  sessionId: string;
+}
+
+interface TwoFactorResponse {
+  requires2FA: boolean;
+  tempToken: string;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -319,6 +337,39 @@ export class AuthService {
         this.errorHandlingService.handleAuthenticationError(error, 'login');
       }
     });
+  }
+
+  async refreshToken(refreshToken: string): Promise<{ access_token: string }> {
+    try {
+      const decoded = this.jwtService.verify(refreshToken);
+      
+      const isRevoked = await this.sessionService.isTokenRevoked(decoded.jti);
+      if (isRevoked) {
+        throw new UnauthorizedException('Token has been revoked');
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: decoded.sub }
+      });
+
+      if (!user) {
+        throw new UnauthorizedException();
+      }
+
+      const payload = {
+        sub: user.id,
+        username: user.username,
+        email: user.email,
+        jti: uuidv4(),
+        type: 'access'
+      };
+
+      return {
+        access_token: this.jwtService.sign(payload, { expiresIn: '15m' })
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   private generateTempToken(user: any) {
@@ -671,18 +722,27 @@ export class AuthService {
       sub: user.id,
       username: user.username,
       email: user.email,
+      jti: uuidv4(),
+      type: 'access',
+      tokenVersion: user.tokenVersion || 0,
     };
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = this.jwtService.sign({
+      ...payload,
+      type: 'refresh'
+    }, { expiresIn: '7d' });
 
     return {
-      access_token: this.jwtService.sign(payload),
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
-    };
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    user: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName
+    }
+  };
   }
   /**
    * End region

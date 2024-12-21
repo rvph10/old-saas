@@ -4,6 +4,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { CustomLoggerService } from './common/monitoring/logger.service';
 import { MetricsService } from './common/monitoring/metrics.service';
+import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -18,6 +19,8 @@ async function bootstrap() {
     'http://localhost:3000',
     process.env.FRONTEND_URL,
   ];
+
+  app.use(cookieParser());
 
   app.enableCors({
     origin: (origin, callback) => {
