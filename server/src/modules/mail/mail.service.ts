@@ -3,6 +3,11 @@ import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from 'src/redis/redis.service';
 
+const ETHEREAL_CREDENTIALS = {
+  user: 'anastasia.bashirian@ethereal.email',
+  pass: 'JaW4RKVnT52B5Y7rcu',
+};
+
 export interface MailOptions {
   to: string;
   subject: string;
@@ -31,21 +36,12 @@ export class MailerService {
     try {
       if (this.configService.get('NODE_ENV') === 'development') {
         this.logger.debug('Initializing Ethereal Email transport');
-        const etherealAccount = await this.getOrCreateEtherealAccount();
-
-        if (etherealAccount) {
-          this.transporter = nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
-            auth: {
-              user: etherealAccount.user,
-              pass: etherealAccount.pass,
-            },
-          });
-        } else {
-          throw new Error('Failed to initialize Ethereal account');
-        }
+        this.transporter = nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
+          auth: ETHEREAL_CREDENTIALS,
+        });
       } else {
         this.transporter = nodemailer.createTransport({
           host: this.configService.get('SMTP_HOST'),
@@ -58,7 +54,6 @@ export class MailerService {
         });
       }
 
-      await this.transporter.verify();
       this.logger.log('Mail transporter initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize mail transporter:', error);
@@ -98,59 +93,6 @@ export class MailerService {
     });
   }
 
-  private async getOrCreateEtherealAccount(): Promise<any> {
-    try {
-      // Try to get cached account
-      const cachedAccount = await this.redisService.get(ETHEREAL_CACHE_KEY);
-
-      if (cachedAccount) {
-        const parsed = JSON.parse(cachedAccount);
-
-        // Verify cached credentials still work
-        try {
-          const testTransporter = nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
-            auth: {
-              user: parsed.user,
-              pass: parsed.pass,
-            },
-          });
-          await testTransporter.verify();
-
-          this.logger.debug('Using cached Ethereal account');
-          return parsed;
-        } catch (error) {
-          this.logger.warn(
-            'Cached credentials invalid, creating new account',
-            error,
-          );
-          await this.redisService.del(ETHEREAL_CACHE_KEY);
-        }
-      }
-
-      // Create new account if none cached
-      this.logger.debug('Creating new Ethereal account');
-      const testAccount = await nodemailer.createTestAccount();
-
-      if (testAccount) {
-        // Cache the new account
-        await this.redisService.set(
-          ETHEREAL_CACHE_KEY,
-          JSON.stringify(testAccount),
-          CACHE_TTL,
-        );
-        return testAccount;
-      }
-
-      throw new Error('Failed to create Ethereal account');
-    } catch (error) {
-      this.logger.error('Failed to get/create Ethereal account:', error);
-      return null;
-    }
-  }
-
   async sendEmailVerification(email: string, token: string): Promise<boolean> {
     const verificationLink = `${this.configService.get('FRONTEND_URL')}/auth/verify/${token}`;
 
@@ -169,7 +111,8 @@ export class MailerService {
 
   async sendMail(options: MailOptions): Promise<boolean> {
     try {
-      if (!this.transporter) {
+      if (!this.transporter || !this.transporter.isIdle()) {
+        this.logger.debug('Reinitializing transporter...');
         await this.initializeTransporter();
       }
 
@@ -217,7 +160,7 @@ export class MailerService {
   async sendWelcome(email: string, username: string): Promise<boolean> {
     return this.sendMail({
       to: email,
-      subject: 'Welcome to Nibblix',
+      subject: 'Welcome to Nibblix!',
       html: `
         <h1>Welcome to Nibblix, ${username}!</h1>
         <p>Thank you for joining our platform. We're excited to have you on board!</p>
@@ -226,3 +169,4 @@ export class MailerService {
     });
   }
 }
+('');

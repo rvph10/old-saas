@@ -1,4 +1,5 @@
 import {
+  ClassSerializerInterceptor,
   MiddlewareConsumer,
   Module,
   NestModule,
@@ -21,9 +22,10 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { MonitoringModule } from './common/monitoring/monitoring.module';
 import { MetricsService } from './common/monitoring/metrics.service';
 import { HealthModule } from './health/health.module';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ErrorModule } from './common/errors/error.module';
 import { RequestSanitizerMiddleware } from './common/security/request-sanitizer.middleware';
+import * as cookieParser from 'cookie-parser';
+import { RefreshTokenMiddleware } from './modules/auth/middleware/refresh-token.middleware';
 
 @Module({
   imports: [
@@ -54,14 +56,15 @@ import { RequestSanitizerMiddleware } from './common/security/request-sanitizer.
     MetricsService,
     {
       provide: APP_INTERCEPTOR,
-      useClass: GlobalExceptionFilter,
+      useClass: ClassSerializerInterceptor,
     },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(RequestSanitizerMiddleware).forRoutes('*');
-
+    consumer.apply(RefreshTokenMiddleware).forRoutes('*');
+    consumer.apply(cookieParser(process.env.COOKIE_SECRET)).forRoutes('*');
     consumer
       .apply(RateLimitMiddleware)
       .exclude('health', 'public', {

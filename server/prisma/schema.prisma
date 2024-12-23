@@ -30,6 +30,7 @@ model User {
   loginHistory    LoginHistory[]
   passwordHistory PasswordHistory[]
   devices         UserDevice[]
+  refreshTokens   RefreshToken[]
 
   //Verification
   isEmailVerified    Boolean   @default(false)
@@ -55,6 +56,26 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+}
+
+model RefreshToken {
+  id            String    @id @default(uuid())
+  token         String    @unique
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  deviceId      String?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  revokedReason String?
+  userAgent     String?
+  ipAddress     String?
+  family        String    @db.Uuid
+  successive    Boolean   @default(false)
+
+  @@index([userId])
+  @@index([token])
+  @@index([family])
 }
 
 model UserDevice {

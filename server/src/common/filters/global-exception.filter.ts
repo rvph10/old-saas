@@ -34,9 +34,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         code: 'INTERNAL_ERROR',
         message: 'Internal server error',
         timestamp: new Date().toISOString(),
-        details: process.env.NODE_ENV === 'development' ? 
-          { error: exception instanceof Error ? exception.message : 'Unknown error' } : 
-          undefined
+        details:
+          process.env.NODE_ENV === 'development'
+            ? {
+                error:
+                  exception instanceof Error
+                    ? exception.message
+                    : 'Unknown error',
+              }
+            : undefined,
       };
     }
 
@@ -48,9 +54,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // Track metrics
     this.trackErrorMetrics(Number(errorResponse.code), request.path);
 
-    response
-      .status(this.getHttpStatus(exception))
-      .json(errorResponse);
+    response.status(this.getHttpStatus(exception)).json(errorResponse);
   }
 
   private handleAppError(error: AppError) {
@@ -58,7 +62,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       code: error.code || 'UNKNOWN_ERROR',
       message: error.message,
       details: error.details,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -66,9 +70,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = exception.getResponse();
     return {
       code: exception instanceof AppError ? exception.code : 'HTTP_ERROR',
-      message: typeof response === 'string' ? response : (response as any).message,
+      message:
+        typeof response === 'string' ? response : (response as any).message,
       details: typeof response === 'object' ? response : undefined,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 

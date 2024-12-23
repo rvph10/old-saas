@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const excludeDirs = ['node_modules', 'tests', 'test', 'logs', '.git', '.next', 'dist', 'build'];
-const excludeExtensions = ['.log', '.gitignore', '.json', '.svg', '.ico', '.txt', '.md', '.sql', '.prisma'];
+const excludeExtensions = ['.log', '.eslintrc', '.dockerignore', '.gitignore', '.json', '.svg', '.ico', '.txt', '.md', '.sql', '.prisma'];
 const outputFilePath = 'output.txt';
 
 function shouldExclude(filePath) {
