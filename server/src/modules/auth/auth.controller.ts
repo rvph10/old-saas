@@ -28,7 +28,11 @@ import { ResendVerificationDto, VerifyEmailDto } from './dto/verifiy-email.dto';
 import { DeviceService } from './services/device.service';
 import { Enable2FADto, Verify2FADto } from './dto/2fa.dto';
 import { TwoFactorService } from './services/two-factor.service';
-import { LocationService } from './services/location.service';
+import { Response } from 'express';
+import { CookieOptions } from 'express';
+import { LoginResponse } from './interfaces/auth.interfaces';
+import { JwtService } from '@nestjs/jwt';
+import { CsrfService } from './services/csrf.service';
 
 @Controller('auth')
 export class AuthController {
@@ -116,6 +120,7 @@ async register(
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async login(
     @Body() loginDto: LoginDto,
     @Req() request: Request,
