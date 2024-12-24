@@ -56,15 +56,6 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new CustomLoggerService(),
   });
-
-  const metricsService = app.get(MetricsService);
-
-  // Updated CORS configuration to handle multiple origins
-  const allowedOrigins = [
-    'http://localhost:3000',
-    process.env.FRONTEND_URL,
-  ];
-
   app.enableCors({
     origin: process.env.FRONTEND_URL,
     credentials: true,
