@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from '../auth.controller';
@@ -14,6 +14,12 @@ import { DeviceModule } from './device.module';
 import { TwoFactorService } from '../services/two-factor.service';
 import { LocationService } from '../services/location.service';
 import { PasswordService } from '../services/password.service';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TokenCleanupTask } from '../tasks/token-cleanup.task';
+import { TokenService } from '../services/token.service';
+import { CookieConfigService } from '../services/cookie-config.service';
+import { CsrfService } from '../services/csrf.service';
+import { CsrfMiddleware } from 'src/common/middleware/csrf.middleware';
 
 @Module({
   imports: [
@@ -24,11 +30,12 @@ import { PasswordService } from '../services/password.service';
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: {
-        expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+        expiresIn: process.env.JWT_EXPIRES_IN || '15m',
         issuer: 'nibblix.com',
         audience: 'nibblix-clients',
       },
     }),
+    ScheduleModule.forRoot(),
   ],
   controllers: [AuthController],
   providers: [
@@ -41,7 +48,32 @@ import { PasswordService } from '../services/password.service';
     LocationService,
     TwoFactorService,
     PasswordService,
+    TokenService,
+    TokenCleanupTask,
+    CookieConfigService,
+    CsrfService
   ],
-  exports: [AuthService, SessionService, DeviceService, PasswordService],
+  exports: [
+    AuthService,
+    SessionService,
+    DeviceService,
+    PasswordService,
+    TokenService,
+    CsrfService
+  ],
 })
-export class AuthModule {}
+export class AuthModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(CsrfMiddleware)
+      .exclude(
+        { path: 'auth/register', method: RequestMethod.POST },
+        { path: 'auth/login', method: RequestMethod.POST },
+        { path: 'auth/verify-email', method: RequestMethod.POST },
+        { path: 'auth/resend-verification', method: RequestMethod.POST },
+        { path: 'auth/password-reset/request', method: RequestMethod.POST },
+        { path: 'auth/csrf-token', method: RequestMethod.GET },
+      )
+      .forRoutes('*');
+  }
+}

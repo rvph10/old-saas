@@ -11,6 +11,7 @@ import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { AppError, SessionError } from 'src/common/errors/custom-errors';
 import { ErrorCodes } from 'src/common/errors/error-codes';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
+import { CookieOptions, Response } from 'express';
 
 interface SessionOptions {
   maxSessions?: number;
@@ -31,6 +32,13 @@ export class SessionService {
   private readonly SESSION_TTL = 24 * 60 * 60;
   private readonly SESSION_REFRESH_THRESHOLD = 60 * 60;
   private readonly DEFAULT_MAX_SESSIONS = 5;
+  private readonly cookieOptions: CookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/',
+  };
 
   private readonly logger = new Logger(SessionService.name);
 
@@ -118,6 +126,7 @@ export class SessionService {
   async forceLogoutOtherSessions(
     userId: string,
     currentSessionId: string,
+    response?: Response,
   ): Promise<number> {
     const sessions = await this.getUserSessions(userId);
     let logoutCount = 0;
@@ -127,6 +136,10 @@ export class SessionService {
         await this.destroySession(sessionId);
         logoutCount++;
       }
+    }
+
+    if (logoutCount === sessions.length - 1) {
+      response?.clearCookie('auth_token', this.cookieOptions);
     }
 
     return logoutCount;

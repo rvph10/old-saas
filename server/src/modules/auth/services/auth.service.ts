@@ -24,7 +24,10 @@ import {
 } from 'src/common/errors/custom-errors';
 import { ErrorCodes } from 'src/common/errors/error-codes';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
-
+import { CookieOptions, Response } from 'express';
+import { LoginResponse } from '../interfaces/auth.interfaces';
+import { TokenService } from './token.service';
+import { CookieConfigService } from './cookie-config.service';
 export interface SessionOptions {
   maxSessions?: number;
   forceLogoutOthers?: boolean;
@@ -58,7 +61,13 @@ interface TwoFactorResponse {
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-
+  private readonly cookieOptions: CookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/',
+  };
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -69,6 +78,8 @@ export class AuthService {
     private locationService: LocationService,
     private passwordService: PasswordService,
     private errorHandlingService: ErrorHandlingService,
+    private tokenService: TokenService,
+    private cookieConfigService: CookieConfigService,
   ) {}
 
   /**
@@ -188,12 +199,10 @@ export class AuthService {
   /**
    * Region for Auth methods
    */
-  async login({
-    loginDto,
-    ipAddress,
-    userAgent,
-    sessionOptions = {},
-  }: LoginParams) {
+  async login(
+    { loginDto, ipAddress, userAgent, sessionOptions = {} }: LoginParams,
+    response: Response,
+  ): Promise<LoginResponse> {
     return await this.performanceService.measureAsync('login', async () => {
       try {
         const user = await this.checkIfUserExists({
@@ -328,8 +337,34 @@ export class AuthService {
           sessionOptions,
         );
 
-        const token = this.generateToken(user);
-        return { ...token, sessionId };
+        const session = await this.sessionService.getSession(sessionId);
+        const { accessToken, refreshToken } =
+          await this.tokenService.generateTokens(user, {
+            deviceId: session.deviceId,
+            ipAddress,
+            userAgent,
+          });
+        response.cookie(
+          'access_token',
+          accessToken,
+          this.cookieConfigService.accessTokenOptions,
+        );
+        response.cookie(
+          'refresh_token',
+          refreshToken,
+          this.cookieConfigService.refreshTokenOptions,
+        );
+
+        return {
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          },
+          sessionId,
+        };
       } catch (error) {
         if (error instanceof AppError) {
           throw error;
@@ -339,37 +374,38 @@ export class AuthService {
     });
   }
 
-  async refreshToken(refreshToken: string): Promise<{ access_token: string }> {
-    try {
-      const decoded = this.jwtService.verify(refreshToken);
-      
-      const isRevoked = await this.sessionService.isTokenRevoked(decoded.jti);
-      if (isRevoked) {
-        throw new UnauthorizedException('Token has been revoked');
-      }
+  async refreshTokens(oldRefreshToken: string, response: Response) {
+    const { isValid, payload, storedToken } =
+      await this.tokenService.verifyRefreshToken(oldRefreshToken);
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: decoded.sub }
-      });
-
-      if (!user) {
-        throw new UnauthorizedException();
-      }
-
-      const payload = {
-        sub: user.id,
-        username: user.username,
-        email: user.email,
-        jti: uuidv4(),
-        type: 'access'
-      };
-
-      return {
-        access_token: this.jwtService.sign(payload, { expiresIn: '15m' })
-      };
-    } catch (error) {
+    if (!isValid || !payload || !storedToken) {
       throw new UnauthorizedException('Invalid refresh token');
     }
+
+    // Revoke the old refresh token
+    await this.tokenService.revokeToken(oldRefreshToken, 'Token refreshed');
+
+    // Generate new tokens
+    const { accessToken, refreshToken } =
+      await this.tokenService.generateTokens(storedToken.user, {
+        deviceId: payload.deviceId,
+        previousToken: oldRefreshToken,
+      });
+
+    // Set new cookies
+    response.cookie('access_token', accessToken, {
+      ...this.cookieOptions,
+      maxAge: 15 * 60 * 1000,
+    });
+
+    response.cookie('refresh_token', refreshToken, {
+      ...this.cookieOptions,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return {
+      message: 'Tokens refreshed successfully',
+    };
   }
 
   private generateTempToken(user: any) {
@@ -379,6 +415,14 @@ export class AuthService {
       exp: Math.floor(Date.now() / 1000) + 5 * 60,
     };
     return this.jwtService.sign(payload);
+  }
+
+  private async cleanupExpiredTokens() {
+    await this.prisma.refreshToken.deleteMany({
+      where: {
+        OR: [{ expiresAt: { lt: new Date() } }, { revokedAt: { not: null } }],
+      },
+    });
   }
 
   async checkPasswordHistory(
@@ -414,8 +458,7 @@ export class AuthService {
     });
   }
 
-  async blockAccount(userId: string) {
-    //TODO: Update to use Permissions and Roles
+  async blockAccount(userId: string, response?: Response) {
     return await this.performanceService.measureAsync(
       'blockAccount',
       async () => {
@@ -425,6 +468,12 @@ export class AuthService {
             deletedAt: new Date(),
           },
         });
+
+        if (response) {
+          response.clearCookie('auth_token', this.cookieOptions);
+        }
+
+        await this.sessionService.revokeAllUserSessions(userId);
       },
     );
   }
@@ -432,6 +481,7 @@ export class AuthService {
   async logoutAllDevices(
     userId: string,
     keepSessionId?: string,
+    response?: Response,
   ): Promise<{ message: string; sessionsTerminated: number }> {
     return await this.performanceService.measureAsync(
       'logoutAllDevices',
@@ -446,12 +496,10 @@ export class AuthService {
           }
         }
 
-        // Track metrics
-        this.performanceService.incrementCounter('mass_logout_events');
-        this.performanceService.setGauge(
-          'active_sessions_' + userId,
-          keepSessionId ? 1 : 0,
-        );
+        // Clear cookie if we're not keeping any session
+        if (!keepSessionId && response) {
+          response.clearCookie('auth_token', this.cookieOptions);
+        }
 
         return {
           message: keepSessionId
@@ -501,11 +549,16 @@ export class AuthService {
     });
   }
 
-  async logout(sessionId: string) {
-    return await this.performanceService.measureAsync('logout', async () => {
-      await this.sessionService.destroySession(sessionId);
-      return { message: 'Logged out successfully' };
-    });
+  async logout(sessionId: string, response: Response): Promise<void> {
+    const refreshToken = response.locals.refreshToken;
+    if (refreshToken) {
+      await this.tokenService.revokeToken(refreshToken, 'User logout');
+    }
+    
+    await this.sessionService.destroySession(sessionId);
+    
+    response.clearCookie('access_token', this.cookieConfigService.defaultOptions);
+    response.clearCookie('refresh_token', this.cookieConfigService.defaultOptions);
   }
 
   async logoutAll(userId: string) {
@@ -515,14 +568,14 @@ export class AuthService {
     });
   }
 
-  async register(registerDto: RegisterDto) {
+  async register(registerDto: RegisterDto, response: Response) {
     return await this.performanceService.measureAsync('register', async () => {
       try {
         const existingUser = await this.checkIfUserExists({
           email: registerDto.email,
           username: registerDto.username,
         });
-
+  
         if (existingUser) {
           this.performanceService.incrementCounter('duplicate_registrations');
           if (existingUser.email === registerDto.email) {
@@ -540,10 +593,11 @@ export class AuthService {
             );
           }
         }
+  
         const passwordValidation = await this.passwordService.validatePassword(
           registerDto.password,
         );
-
+  
         if (!passwordValidation.isValid) {
           throw new ValidationError(
             'Password validation failed',
@@ -554,13 +608,13 @@ export class AuthService {
             'register',
           );
         }
-
+  
         this.performanceService.incrementCounter('successful_registrations');
         const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
+  
         const verificationToken = uuidv4();
         const verificationExpiry = addMinutes(new Date(), 15);
-
+  
         const user = await this.createUser({
           username: registerDto.username,
           email: registerDto.email,
@@ -570,15 +624,45 @@ export class AuthService {
           verificationToken,
           verificationExpiry,
         });
+  
         await this.savePasswordToHistory(user.id, hashedPassword);
-
+        await this.mailerService.sendWelcome(user.email, user.username);
         await this.mailerService.sendEmailVerification(
           user.email,
           verificationToken,
         );
-
-        await this.mailerService.sendWelcome(user.email, user.username);
-        return this.generateToken(user);
+  
+        // Generate tokens
+        const { accessToken, refreshToken } = await this.tokenService.generateTokens(
+          user,
+          {
+            deviceId: uuidv4(), // Generate a new device ID for initial registration
+            ipAddress: '127.0.0.1', // You might want to pass this from the controller
+            userAgent: 'Initial Registration', // You might want to pass this from the controller
+          }
+        );
+  
+        // Set cookies
+        response.cookie(
+          'access_token',
+          accessToken,
+          this.cookieConfigService.accessTokenOptions,
+        );
+        response.cookie(
+          'refresh_token',
+          refreshToken,
+          this.cookieConfigService.refreshTokenOptions,
+        );
+  
+        return {
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          },
+        };
       } catch (error) {
         if (error instanceof AppError) {
           throw error;
@@ -678,7 +762,10 @@ export class AuthService {
     );
   }
 
-  async resetPassword(resetDto: ResetPasswordDto) {
+  async resetPassword(
+    resetDto: ResetPasswordDto,
+    response: Response<any, Record<string, any>>,
+  ) {
     return await this.performanceService.measureAsync(
       'resetPassword',
       async () => {
@@ -705,7 +792,7 @@ export class AuthService {
             data: { password: hashedPassword },
           });
           this.sessionService.revokeAllUserSessions(userId);
-          await this.savePasswordToHistory(userId, hashedPassword);
+          response.clearCookie('auth_token', this.cookieOptions);
 
           await this.redisService.del(`pwd_reset:${resetDto.token}`);
           return { message: 'Password successfully reset' };
@@ -717,32 +804,14 @@ export class AuthService {
     );
   }
 
-  private generateToken(user: any) {
-    const payload = {
-      sub: user.id,
-      username: user.username,
-      email: user.email,
-      jti: uuidv4(),
-      type: 'access',
-      tokenVersion: user.tokenVersion || 0,
-    };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-    const refreshToken = this.jwtService.sign({
-      ...payload,
-      type: 'refresh'
-    }, { expiresIn: '7d' });
+  async refreshToken(refreshToken: string, response: Response) {
+    const { accessToken, refreshToken: newRefreshToken } = 
+      await this.tokenService.refreshTokens(refreshToken);
 
-    return {
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName
-    }
-  };
+    response.cookie('access_token', accessToken, this.cookieConfigService.accessTokenOptions);
+    response.cookie('refresh_token', newRefreshToken, this.cookieConfigService.refreshTokenOptions);
+
+    return { message: 'Tokens refreshed successfully' };
   }
   /**
    * End region

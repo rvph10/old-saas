@@ -13,3 +13,4 @@ client/output.txt
 server/output.txt
 client/fake-accounts/accounts.json
 client/request.http
+request.http

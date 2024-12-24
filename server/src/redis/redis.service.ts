@@ -10,6 +10,10 @@ export class RedisService {
     return this.cacheManager.get(key);
   }
 
+  getClient() {
+    return (this.cacheManager.store as any).getClient();
+  }
+
   async set(key: string, value: any, ttl: number): Promise<void> {
     await this.cacheManager.set(key, value, ttl * 1000);
   }

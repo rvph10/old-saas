@@ -18,6 +18,7 @@ const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
   headers: {
     'Content-Type': 'application/json',
+    'Access-Control-Allow-Credentials': 'true',
   },
   withCredentials: true,
   timeout: TIMEOUT_DURATION,
@@ -26,9 +27,10 @@ const apiClient = axios.create({
 // Request interceptor
 apiClient.interceptors.request.use(
   async (config) => {
-    // Get token from localStorage
     const token = localStorage.getItem('access_token');
     const sessionId = localStorage.getItem('sessionId');
+
+    config.headers = config.headers || {};
 
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
@@ -38,16 +40,10 @@ apiClient.interceptors.request.use(
       config.headers['session-id'] = sessionId;
     }
 
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  },
-);
+    // Add CORS headers
+    config.headers['Access-Control-Allow-Credentials'] = 'true';
 
-apiClient.interceptors.request.use(
-  (config) => {
-    // Log the request in development
+    // Log requests in development
     if (process.env.NODE_ENV === 'development') {
       console.log('API Request:', {
         method: config.method,
@@ -55,27 +51,39 @@ apiClient.interceptors.request.use(
         data: config.data,
       });
     }
+
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
+// Response interceptor
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
+    // Handle timeout
     if (error.code === 'ECONNABORTED') {
       console.error('Request timeout');
       throw new Error('Request timeout: Server is not responding');
     }
     
+    // Handle network errors
     if (!error.response) {
       console.error('Network error:', error);
       throw new Error('Network error: Please check your connection');
     }
 
-    // Log the error in development
+    // Handle 401 errors (unauthorized)
+    if (
+      error.response?.status === 401 &&
+      error.config &&
+      !error.config?.headers['x-retry']
+    ) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('sessionId');
+    }
+
+    // Log errors in development
     if (process.env.NODE_ENV === 'development') {
       console.error('API Error:', {
         status: error.response?.status,
@@ -88,31 +96,6 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Response interceptor
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config;
-
-    // Handle 401 errors (unauthorized)
-    if (
-      error.response?.status === 401 &&
-      originalRequest &&
-      !originalRequest?.headers['x-retry']
-    ) {
-      // Clear auth state
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('sessionId');
-
-      // Redirect to login
-      //window.location.href = '/auth/login';
-      return Promise.reject(error);
-    }
-
-    return Promise.reject(error);
-  },
-);
-
 // Auth API
 export const authApi = {
   login: async (credentials: {
@@ -120,39 +103,18 @@ export const authApi = {
     password: string;
   }): Promise<AuthResponse> => {
     try {
-      const response = await apiClient.post<AuthResponse>(
-        '/auth/login',
-        credentials,
-      );
+      const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
       const { access_token, sessionId } = response.data;
 
-      // Store auth data
-      if (access_token) {
-        localStorage.setItem('access_token', access_token);
-      }
-      if (sessionId) {
-        localStorage.setItem('sessionId', sessionId);
-      }
+      if (access_token) localStorage.setItem('access_token', access_token);
+      if (sessionId) localStorage.setItem('sessionId', sessionId);
 
       return response.data;
     } catch (error) {
-      // More detailed error handling
       if (axios.isAxiosError(error)) {
-        // Specific error details from server
         const serverErrorMessage = error.response?.data?.message;
-
-        console.error('Login API error:', {
-          serverMessage: serverErrorMessage,
-          status: error.response?.status,
-          fullError: error,
-        });
-
-        // Throw a more informative error
         throw new Error(serverErrorMessage || 'Login failed');
       }
-
-      // Generic error
-      console.error('Unexpected login error:', error);
       throw error;
     }
   },
@@ -165,14 +127,13 @@ export const authApi = {
     firstName?: string;
     lastName?: string;
   }) => {
-    const {confirmPassword, ...apiData} = data;
+    const { confirmPassword, ...apiData } = data;
     return apiClient.post('/auth/register', apiData);
   },
 
   logout: async () => {
     try {
       const response = await apiClient.post('/auth/logout');
-      // Clear auth data
       localStorage.removeItem('access_token');
       localStorage.removeItem('sessionId');
       return response.data;
@@ -182,39 +143,31 @@ export const authApi = {
     }
   },
 
-  verifyEmail: async (token: string) => {
-    return apiClient.post('/auth/verify-email', { token });
-  },
+  verifyEmail: async (token: string) => 
+    apiClient.post('/auth/verify-email', { token }),
 
-  getCurrentUser: async () => {
-    return apiClient.get('/auth/me');
-  },
+  getCurrentUser: async () => 
+    apiClient.get('/auth/me'),
 
-  requestPasswordReset: async (email: string) => {
-    return apiClient.post('/auth/password-reset/request', { email });
-  },
+  requestPasswordReset: async (email: string) => 
+    apiClient.post('/auth/password-reset/request', { email }),
 
-  resetPassword: async (token: string, password: string) => {
-    return apiClient.post('/auth/password-reset/reset', { token, password });
-  },
+  resetPassword: async (token: string, password: string) => 
+    apiClient.post('/auth/password-reset/reset', { token, password }),
 
-  resendVerification: async (email: string) => {
-    return apiClient.post('/auth/resend-verification', { email });
-  },
+  resendVerification: async (email: string) => 
+    apiClient.post('/auth/resend-verification', { email }),
 
-  getSessions: async () => {
-    return apiClient.get('/auth/sessions');
-  },
+  getSessions: async () => 
+    apiClient.get('/auth/sessions'),
 
-  terminateSession: async (sessionId: string) => {
-    return apiClient.delete(`/auth/sessions/${sessionId}`);
-  },
+  terminateSession: async (sessionId: string) => 
+    apiClient.delete(`/auth/sessions/${sessionId}`),
 
-  logoutAllDevices: async (keepCurrentSession: boolean = false) => {
-    return apiClient.delete('/auth/logout-all', {
+  logoutAllDevices: async (keepCurrentSession: boolean = false) => 
+    apiClient.delete('/auth/logout-all', {
       data: { keepCurrentSession },
-    });
-  },
+    }),
 };
 
 export default apiClient;
