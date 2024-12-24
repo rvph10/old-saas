@@ -557,7 +557,7 @@ export class AuthService {
           email: registerDto.email,
           username: registerDto.username,
         });
-
+  
         if (existingUser) {
           this.performanceService.incrementCounter('duplicate_registrations');
           if (existingUser.email === registerDto.email) {
@@ -575,10 +575,11 @@ export class AuthService {
             );
           }
         }
+  
         const passwordValidation = await this.passwordService.validatePassword(
           registerDto.password,
         );
-
+  
         if (!passwordValidation.isValid) {
           throw new ValidationError(
             'Password validation failed',
@@ -589,13 +590,13 @@ export class AuthService {
             'register',
           );
         }
-
+  
         this.performanceService.incrementCounter('successful_registrations');
         const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
+  
         const verificationToken = uuidv4();
         const verificationExpiry = addMinutes(new Date(), 15);
-
+  
         const user = await this.createUser({
           username: registerDto.username,
           email: registerDto.email,
@@ -605,20 +606,36 @@ export class AuthService {
           verificationToken,
           verificationExpiry,
         });
+  
         await this.savePasswordToHistory(user.id, hashedPassword);
         await this.mailerService.sendWelcome(user.email, user.username);
         await this.mailerService.sendEmailVerification(
           user.email,
           verificationToken,
         );
-        const token = this.jwtService.sign({
-          sub: user.id,
-          username: user.username,
-          email: user.email,
-        });
-
-        response.cookie('auth_token', token, this.cookieOptions);
-
+  
+        // Generate tokens
+        const { accessToken, refreshToken } = await this.tokenService.generateTokens(
+          user,
+          {
+            deviceId: uuidv4(), // Generate a new device ID for initial registration
+            ipAddress: '127.0.0.1', // You might want to pass this from the controller
+            userAgent: 'Initial Registration', // You might want to pass this from the controller
+          }
+        );
+  
+        // Set cookies
+        response.cookie(
+          'access_token',
+          accessToken,
+          this.cookieConfigService.accessTokenOptions,
+        );
+        response.cookie(
+          'refresh_token',
+          refreshToken,
+          this.cookieConfigService.refreshTokenOptions,
+        );
+  
         return {
           user: {
             id: user.id,

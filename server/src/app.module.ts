@@ -62,22 +62,40 @@ import { RefreshTokenMiddleware } from './modules/auth/middleware/refresh-token.
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestSanitizerMiddleware).forRoutes('*');
-    consumer.apply(RefreshTokenMiddleware).forRoutes('*');
-    consumer.apply(cookieParser(process.env.COOKIE_SECRET)).forRoutes('*');
+    // 1. Cookie Parser middleware
     consumer
-      .apply(RateLimitMiddleware)
-      .exclude('health', 'public', {
-        path: 'metrics',
-        method: RequestMethod.GET,
-      })
+      .apply(cookieParser(process.env.COOKIE_SECRET))
       .forRoutes('*');
 
+    // 2. Security middleware
     consumer
-      .apply(RateLimitMiddleware)
-      .exclude('health', 'public')
+      .apply(RequestSanitizerMiddleware)
       .forRoutes('*');
 
-    consumer.apply(SessionMiddleware).forRoutes('auth/*');
+    // 3. Refresh token middleware with proper exclusions
+    consumer
+      .apply(RefreshTokenMiddleware)
+      .exclude(
+        { path: 'auth/register', method: RequestMethod.POST },
+        { path: 'auth/login', method: RequestMethod.POST },
+        { path: 'auth/password-reset/request', method: RequestMethod.POST },
+        { path: 'auth/verify-email', method: RequestMethod.POST }
+      )
+      .forRoutes('*');
+
+    // 4. Rate limiting middleware
+    consumer
+      .apply(RateLimitMiddleware)
+      .exclude(
+        'health',
+        'public',
+        { path: 'metrics', method: RequestMethod.GET }
+      )
+      .forRoutes('*');
+
+    // 5. Session middleware only for auth routes
+    consumer
+      .apply(SessionMiddleware)
+      .forRoutes('auth/*');
   }
 }

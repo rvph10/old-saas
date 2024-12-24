@@ -67,8 +67,11 @@ export class AuthModule implements NestModule {
     consumer
       .apply(CsrfMiddleware)
       .exclude(
-        { path: 'auth/login', method: RequestMethod.POST },
         { path: 'auth/register', method: RequestMethod.POST },
+        { path: 'auth/login', method: RequestMethod.POST },
+        { path: 'auth/verify-email', method: RequestMethod.POST },
+        { path: 'auth/resend-verification', method: RequestMethod.POST },
+        { path: 'auth/password-reset/request', method: RequestMethod.POST },
         { path: 'auth/csrf-token', method: RequestMethod.GET },
       )
       .forRoutes('*');

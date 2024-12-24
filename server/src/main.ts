@@ -7,6 +7,7 @@ import { MetricsService } from './common/monitoring/metrics.service';
 import { RedisService } from './redis/redis.service';
 import * as expressSession from 'express-session';
 import { Store } from 'express-session';
+import * as cookieParser from 'cookie-parser';
 
 // Create a custom session store that uses our RedisService
 class CustomRedisStore extends Store {
@@ -55,13 +56,6 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: new CustomLoggerService(),
   });
-
-  const metricsService = app.get(MetricsService);
-  const redisService = app.get(RedisService);
-
-  logger.debug('FRONTEND_URL:', process.env.FRONTEND_URL);
-  logger.debug('NODE_ENV:', process.env.NODE_ENV);
-
   app.enableCors({
     origin: process.env.FRONTEND_URL,
     credentials: true,
@@ -74,6 +68,12 @@ async function bootstrap() {
       'Authorization',
     ],
   });
+
+  app.use(cookieParser(process.env.COOKIE_SECRET));
+
+  const metricsService = app.get(MetricsService);
+  const redisService = app.get(RedisService);
+
 
   app.use(
     (

@@ -8,16 +8,27 @@ export class RefreshTokenMiddleware implements NestMiddleware {
   constructor(private authService: AuthService) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
-    const accessToken = req.cookies['access_token'];
-    const refreshToken = req.cookies['refresh_token'];
+    // Skip for specific routes
+    if (
+      req.path.includes('/auth/register') ||
+      req.path.includes('/auth/login') ||
+      req.path.includes('/auth/password-reset') ||
+      req.path.includes('/auth/verify-email')
+    ) {
+      return next();
+    }
 
-    if (!accessToken && refreshToken) {
-      try {
-        await this.authService.refreshTokens(refreshToken, res);
-      } catch (error) {
-        // Token refresh failed, continue to next middleware
-        console.error('Token refresh failed:', error);
+    try {
+      const cookies = req.cookies || {};
+      const accessToken = cookies['access_token'];
+      const refreshToken = cookies['refresh_token'];
+
+      if (!accessToken && refreshToken) {
+        await this.authService.refreshToken(refreshToken, res);
       }
+    } catch (error) {
+      // Log error but don't block the request
+      console.error('Token refresh failed:', error);
     }
 
     next();
