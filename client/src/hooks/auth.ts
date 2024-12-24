@@ -20,20 +20,22 @@ export function useLogin() {
   const queryClient = useQueryClient();
 
   return useMutation<AuthResponse, Error, { username: string; password: string }>({
-    mutationFn: async (credentials: { username: string; password: string; }) => {
+    mutationFn: async (credentials) => {
       const result = await Promise.race<AuthResponse>([
         authApi.login(credentials),
         timeoutPromise(),
       ]);
+      
+      // Store sessionId if provided
+      if (result.sessionId) {
+        localStorage.setItem('sessionId', result.sessionId);
+      }
+
       return result;
     },
-    onSuccess: (data: { user: any; }) => {
-      // Store the user data in React Query cache
+    onSuccess: (data) => {
       queryClient.setQueryData(['user'], data.user);
       router.push('/dashboard');
-    },
-    onError: (error: any) => {
-      console.error('Login error:', error);
     },
   });
 }
@@ -62,17 +64,20 @@ export function useLogout() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  return useMutation<any, Error, void>({
+  return useMutation<void, Error, void>({
     mutationFn: async () => {
-      const result = await Promise.race<any>([
-        authApi.logout(),
-        timeoutPromise(),
-      ]);
-      return result;
+      const sessionId = localStorage.getItem('sessionId');
+      if (!sessionId) throw new Error('No active session');
+
+      await authApi.logout();
+      localStorage.removeItem('sessionId');
+      
+      // Clear cookies by setting expired date
+      document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+      document.cookie = 'refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+      document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
     },
     onSuccess: () => {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('sessionId');
       queryClient.clear();
       router.push('/auth/login');
     },

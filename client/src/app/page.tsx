@@ -4,6 +4,7 @@ import { LoggerProvider } from '@/components/providers/logger-provider';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { TestConnection } from '@/components/test-conection';
 
 const features = [
   {
@@ -104,6 +105,7 @@ export default function HomePage() {
           </div>
         </footer>
       </div>
+      <TestConnection />
     </LoggerProvider>
   );
 }

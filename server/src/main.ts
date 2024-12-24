@@ -57,17 +57,30 @@ async function bootstrap() {
     logger: new CustomLoggerService(),
   });
   app.enableCors({
-    origin: process.env.FRONTEND_URL,
+    origin: 'http://192.168.129.100:3000',
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Origin',
       'X-Requested-With',
       'Content-Type',
       'Accept',
       'Authorization',
+      'Access-Control-Allow-Credentials',
+      'Access-Control-Allow-Headers',
+      'Access-Control-Allow-Origin',
+      'X-CSRF-Token',
+      'session-id',
+      'Cookie'
     ],
+    exposedHeaders: ['Set-Cookie'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
   });
+  
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', 1);
+
 
   app.use(cookieParser(process.env.COOKIE_SECRET));
 

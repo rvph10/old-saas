@@ -1,15 +1,16 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
 
 export interface AuthResponse {
-  access_token: string;
-  user: {
+  user?: {
     id: string;
     username: string;
     email: string;
     firstName?: string;
     lastName?: string;
   };
-  sessionId: string;
+  sessionId?: string;
+  requires2FA?: boolean;
+  tempToken?: string;
 }
 
 const TIMEOUT_DURATION = 10000;
@@ -22,77 +23,108 @@ const apiClient = axios.create({
   },
   withCredentials: true,
   timeout: TIMEOUT_DURATION,
+  timeoutErrorMessage: 'Request timed out',
 });
+
+const clearAuthState = () => {
+  localStorage.removeItem('sessionId');
+  const cookies = ['access_token', 'refresh_token', 'csrf_token'];
+  cookies.forEach(cookie => {
+    document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+  });
+};
 
 // Request interceptor
 apiClient.interceptors.request.use(
-  async (config) => {
-    const token = localStorage.getItem('access_token');
+  async (config: InternalAxiosRequestConfig) => {
+    // Initialize headers as AxiosHeaders if not exist
+    if (!config.headers) {
+      config.headers = new AxiosHeaders();
+    }
+
+    // Set default headers
+    config.headers.set('Content-Type', 'application/json');
+    config.headers.set('Access-Control-Allow-Credentials', 'true');
+    
+    // Get CSRF token from cookie
+    const csrfToken = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('csrf_token='))
+      ?.split('=')[1];
+
+    if (csrfToken) {
+      config.headers.set('x-csrf-token', csrfToken);
+    }
+
+    // Add session ID from storage if available
     const sessionId = localStorage.getItem('sessionId');
-
-    config.headers = config.headers || {};
-
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
-    }
-
     if (sessionId) {
-      config.headers['session-id'] = sessionId;
+      config.headers.set('session-id', sessionId);
     }
 
-    // Add CORS headers
-    config.headers['Access-Control-Allow-Credentials'] = 'true';
-
-    // Log requests in development
     if (process.env.NODE_ENV === 'development') {
-      console.log('API Request:', {
-        method: config.method,
+      console.log('Request:', {
         url: config.url,
-        data: config.data,
+        method: config.method,
+        headers: config.headers,
+        data: config.data
       });
     }
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.error('Request Error:', error);
+    return Promise.reject(error);
+  }
 );
 
 // Response interceptor
 apiClient.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    // Handle timeout
-    if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout');
-      throw new Error('Request timeout: Server is not responding');
-    }
-    
-    // Handle network errors
-    if (!error.response) {
-      console.error('Network error:', error);
-      throw new Error('Network error: Please check your connection');
-    }
-
-    // Handle 401 errors (unauthorized)
-    if (
-      error.response?.status === 401 &&
-      error.config &&
-      !error.config?.headers['x-retry']
-    ) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('sessionId');
-    }
-
-    // Log errors in development
+  (response) => {
     if (process.env.NODE_ENV === 'development') {
-      console.error('API Error:', {
+      console.log('Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: response.data,
+        headers: response.headers
+      });
+    }
+    return response;
+  },
+  async (error: AxiosError) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Response Error:', {
         status: error.response?.status,
+        statusText: error.response?.statusText,
         data: error.response?.data,
-        config: error.config,
+        message: error.message
       });
     }
 
-    return Promise.reject(error);
+    if (error.code === 'ECONNABORTED') {
+      throw new Error('Request timeout: Server is not responding');
+    }
+
+    if (!error.response) {
+      throw new Error('Network error: Please check your connection');
+    }
+
+    // Handle specific error codes
+    switch (error.response.status) {
+      case 401:
+        clearAuthState();
+        break;
+      case 403:
+        throw new Error('Access denied. Please check your permissions.');
+      case 404:
+        throw new Error('Resource not found.');
+      case 500:
+        throw new Error('Server error. Please try again later.');
+    }
+
+    // If no specific error handling, throw the original error
+    throw error;
   }
 );
 
@@ -104,10 +136,10 @@ export const authApi = {
   }): Promise<AuthResponse> => {
     try {
       const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
-      const { access_token, sessionId } = response.data;
-
-      if (access_token) localStorage.setItem('access_token', access_token);
-      if (sessionId) localStorage.setItem('sessionId', sessionId);
+      
+      if (response.data.sessionId) {
+        localStorage.setItem('sessionId', response.data.sessionId);
+      }
 
       return response.data;
     } catch (error) {
@@ -122,19 +154,16 @@ export const authApi = {
   register: async (data: {
     email: string;
     username: string;
-    confirmPassword: string;
     password: string;
     firstName?: string;
     lastName?: string;
   }) => {
-    const { confirmPassword, ...apiData } = data;
-    return apiClient.post('/auth/register', apiData);
+    return apiClient.post('/auth/register', data);
   },
 
   logout: async () => {
     try {
       const response = await apiClient.post('/auth/logout');
-      localStorage.removeItem('access_token');
       localStorage.removeItem('sessionId');
       return response.data;
     } catch (error) {
@@ -143,8 +172,15 @@ export const authApi = {
     }
   },
 
+  refreshToken: async () => {
+    return apiClient.post('/auth/refresh');
+  },
+
   verifyEmail: async (token: string) => 
     apiClient.post('/auth/verify-email', { token }),
+
+  resendVerification: async (email: string) => 
+    apiClient.post('/auth/resend-verification', { email }),
 
   getCurrentUser: async () => 
     apiClient.get('/auth/me'),
@@ -155,19 +191,24 @@ export const authApi = {
   resetPassword: async (token: string, password: string) => 
     apiClient.post('/auth/password-reset/reset', { token, password }),
 
-  resendVerification: async (email: string) => 
-    apiClient.post('/auth/resend-verification', { email }),
-
-  getSessions: async () => 
-    apiClient.get('/auth/sessions'),
-
   terminateSession: async (sessionId: string) => 
     apiClient.delete(`/auth/sessions/${sessionId}`),
 
   logoutAllDevices: async (keepCurrentSession: boolean = false) => 
-    apiClient.delete('/auth/logout-all', {
-      data: { keepCurrentSession },
+    apiClient.post('/auth/logout-all', { 
+      keepCurrentSession 
     }),
+    getSessions: async () => 
+      apiClient.get('/auth/sessions'),
+      
+    blockAccount: async (accountId: string) => 
+      apiClient.post('/auth/block', { accountId }),
+  
+    extend2FASession: async (token: string) => 
+      apiClient.post('/auth/2fa/verify', { token }),
+  
+    getCsrfToken: async () => 
+      apiClient.get('/auth/csrf-token'),
 };
 
 export default apiClient;

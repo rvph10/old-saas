@@ -1,38 +1,34 @@
-// next.config.ts
-import { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
-  poweredByHeader: false,
-  // Disable automatic prefetching in development
-  devIndicators: {
-    buildActivity: true,
-    buildActivityPosition: 'bottom-right',
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${process.env.NEXT_PUBLIC_API_URL}/:path*`
+      }
+    ];
   },
-  onDemandEntries: {
-    // Configure how long serverless pages should remain in memory
-    maxInactiveAge: 25 * 1000,
-    // Configure how many pages should be kept in memory
-    pagesBufferLength: 2,
-  },
-  env: {
-    NEXT_PUBLIC_API_URL:
-      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
+  async headers() {
+    return [
+      {
+        // matching all API routes
+        source: "/api/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Credentials", value: "true" },
+          { key: "Access-Control-Allow-Origin", value: "http://192.168.129.100:3000" },
+          { key: "Access-Control-Allow-Methods", value: "GET,DELETE,PATCH,POST,PUT" },
+          { key: "Access-Control-Allow-Headers", value: "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, session-id" },
+        ]
+      }
+    ]
   },
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-    ],
+    domains: ['localhost', '192.168.129.200'],
   },
-  // Add logging for debugging
-  logging: {
-    fetches: {
-      fullUrl: true,
-    },
-  },
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
+  }
 };
 
 export default nextConfig;
