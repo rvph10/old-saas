@@ -1,13 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
-import { CustomLoggerService } from './common/monitoring/logger.service';
-import { MetricsService } from './common/monitoring/metrics.service';
-import { RedisService } from './redis/redis.service';
 import * as expressSession from 'express-session';
 import { Store } from 'express-session';
 import * as cookieParser from 'cookie-parser';
+import { RedisService } from '@infrastructure/cache/redis.service';
+import { CustomLoggerService } from '@infrastructure/logger/logger.service';
+import { MetricsService } from '@infrastructure/monitoring/metrics.service';
+import { GlobalExceptionFilter } from '@core/filters/global-exception.filter';
 
 // Create a custom session store that uses our RedisService
 class CustomRedisStore extends Store {
@@ -71,22 +71,20 @@ async function bootstrap() {
       'Access-Control-Allow-Origin',
       'X-CSRF-Token',
       'session-id',
-      'Cookie'
+      'Cookie',
     ],
     exposedHeaders: ['Set-Cookie'],
     preflightContinue: false,
-    optionsSuccessStatus: 204
+    optionsSuccessStatus: 204,
   });
-  
+
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.set('trust proxy', 1);
-
 
   app.use(cookieParser(process.env.COOKIE_SECRET));
 
   const metricsService = app.get(MetricsService);
   const redisService = app.get(RedisService);
-
 
   app.use(
     (

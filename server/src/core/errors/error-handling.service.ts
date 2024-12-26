@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MetricsService } from '../monitoring/metrics.service';
 import { ConfigService } from '@nestjs/config';
 import {
   AppError,
@@ -9,6 +8,7 @@ import {
 } from './custom-errors';
 import { ErrorCodes } from './error-codes';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { MetricsService } from '@infrastructure/monitoring/metrics.service';
 
 @Injectable()
 export class ErrorHandlingService {

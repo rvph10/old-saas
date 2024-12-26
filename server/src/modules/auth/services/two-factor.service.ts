@@ -2,9 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../core/database/prisma.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
-import { AppError, TwoFactorError } from '../../../common/errors/custom-errors';
-import { ErrorCodes } from '../../../common/errors/error-codes';
-import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
+import { AppError, ErrorCodes, ErrorHandlingService, TwoFactorError } from '@core/errors';
 
 @Injectable()
 export class TwoFactorService {

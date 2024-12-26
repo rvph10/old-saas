@@ -14,25 +14,29 @@ import {
   BadRequestException,
   Res,
 } from '@nestjs/common';
-import { Request } from 'express';
-import { AuthService } from './services/auth.service';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import { RequestResetDto, ResetPasswordDto } from './dto/password-reset.dto';
-import { Throttle } from '@nestjs/throttler';
-import { JwtAuthGuard } from './guard/jwt-auth.guard';
-import { SessionService } from '../session/services/session.service';
-import { SessionGuard } from './guard/session.guard';
-import { PerformanceService } from 'src/common/monitoring/performance.service';
-import { ResendVerificationDto, VerifyEmailDto } from './dto/verifiy-email.dto';
-import { DeviceService } from './services/device.service';
-import { Enable2FADto, Verify2FADto } from './dto/2fa.dto';
-import { TwoFactorService } from './services/two-factor.service';
-import { Response } from 'express';
-import { CookieOptions } from 'express';
-import { LoginResponse } from './interfaces/auth.interfaces';
+import {
+  AuthService,
+  CsrfService,
+  DeviceService,
+  TwoFactorService,
+} from '../services';
+import { SessionService } from '@modules/session/services';
+import { PerformanceService } from '@infrastructure/monitoring/performance.service';
 import { JwtService } from '@nestjs/jwt';
-import { CsrfService } from './services/csrf.service';
+import { JwtAuthGuard, SessionGuard } from '../guards';
+import {
+  Enable2FADto,
+  LoginDto,
+  RegisterDto,
+  RequestResetDto,
+  ResendVerificationDto,
+  ResetPasswordDto,
+  Verify2FADto,
+  VerifyEmailDto,
+} from '../dto';
+import { Throttle } from '@nestjs/throttler';
+import { LoginResponse } from '../interfaces';
+import { CookieOptions, Request, Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
@@ -106,17 +110,14 @@ export class AuthController {
   }
 
   @Post('register')
-@HttpCode(HttpStatus.CREATED)
-async register(
-  @Body() registerDto: RegisterDto,
-  @Req() request: Request,
-  @Res({ passthrough: true }) response: Response,
-) {
-  return this.authService.register(
-    registerDto,
-    response
-  );
-}
+  @HttpCode(HttpStatus.CREATED)
+  async register(
+    @Body() registerDto: RegisterDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.authService.register(registerDto, response);
+  }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -311,7 +312,7 @@ async register(
     @Res({ passthrough: true }) response: Response,
   ) {
     const token = await this.csrfService.generateToken(sessionId);
-    
+
     response.cookie('csrf_token', token, {
       httpOnly: false,
       secure: process.env.NODE_ENV === 'production',

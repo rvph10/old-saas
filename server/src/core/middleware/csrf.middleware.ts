@@ -11,15 +11,17 @@ export class CsrfMiddleware implements NestMiddleware {
     '/auth/verify-email',
     '/auth/resend-verification',
     '/auth/password-reset/request',
-    '/auth/csrf-token'
+    '/auth/csrf-token',
   ];
-  
+
   constructor(private readonly csrfService: CsrfService) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
     // Skip CSRF check for safe methods and public routes
-    if (this.SAFE_METHODS.includes(req.method) || 
-        this.PUBLIC_ROUTES.some(route => req.path.includes(route))) {
+    if (
+      this.SAFE_METHODS.includes(req.method) ||
+      this.PUBLIC_ROUTES.some((route) => req.path.includes(route))
+    ) {
       return next();
     }
 
@@ -27,7 +29,7 @@ export class CsrfMiddleware implements NestMiddleware {
     const sessionId = req.headers['session-id'] as string;
 
     // For protected routes that require a session
-    if (!this.PUBLIC_ROUTES.some(route => req.path.includes(route))) {
+    if (!this.PUBLIC_ROUTES.some((route) => req.path.includes(route))) {
       if (!sessionId) {
         throw new ForbiddenException('No session ID provided');
       }
@@ -36,8 +38,11 @@ export class CsrfMiddleware implements NestMiddleware {
         throw new ForbiddenException('CSRF token missing');
       }
 
-      const isValid = await this.csrfService.validateToken(sessionId, csrfToken);
-      
+      const isValid = await this.csrfService.validateToken(
+        sessionId,
+        csrfToken,
+      );
+
       if (!isValid) {
         throw new ForbiddenException('Invalid CSRF token');
       }

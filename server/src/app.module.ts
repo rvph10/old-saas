@@ -50,7 +50,7 @@ import { HealthController } from '@modules/health/health.controller';
     HealthModule,
     ErrorModule,
     SessionModule,
-    ScheduleModule.forRoot()
+    ScheduleModule.forRoot(),
   ],
   controllers: [HealthController],
   providers: [
@@ -66,14 +66,10 @@ import { HealthController } from '@modules/health/health.controller';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     // 1. Cookie Parser middleware
-    consumer
-      .apply(cookieParser(process.env.COOKIE_SECRET))
-      .forRoutes('*');
+    consumer.apply(cookieParser(process.env.COOKIE_SECRET)).forRoutes('*');
 
     // 2. Security middleware
-    consumer
-      .apply(RequestSanitizerMiddleware)
-      .forRoutes('*');
+    consumer.apply(RequestSanitizerMiddleware).forRoutes('*');
 
     // 3. Refresh token middleware with proper exclusions
     consumer
@@ -82,23 +78,20 @@ export class AppModule implements NestModule {
         { path: 'auth/register', method: RequestMethod.POST },
         { path: 'auth/login', method: RequestMethod.POST },
         { path: 'auth/password-reset/request', method: RequestMethod.POST },
-        { path: 'auth/verify-email', method: RequestMethod.POST }
+        { path: 'auth/verify-email', method: RequestMethod.POST },
       )
       .forRoutes('*');
 
     // 4. Rate limiting middleware
     consumer
       .apply(RateLimitMiddleware)
-      .exclude(
-        'health',
-        'public',
-        { path: 'metrics', method: RequestMethod.GET }
-      )
+      .exclude('health', 'public', {
+        path: 'metrics',
+        method: RequestMethod.GET,
+      })
       .forRoutes('*');
 
     // 5. Session middleware only for auth routes
-    consumer
-      .apply(SessionMiddleware)
-      .forRoutes('auth/*');
+    consumer.apply(SessionMiddleware).forRoutes('auth/*');
   }
 }

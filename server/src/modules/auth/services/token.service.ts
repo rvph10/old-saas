@@ -1,5 +1,3 @@
-// src/modules/auth/services/token.service.ts
-
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { JwtService } from '@nestjs/jwt';
@@ -20,8 +18,11 @@ export class TokenService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  async refreshTokens(oldRefreshToken: string): Promise<{ accessToken: string, refreshToken: string }> {
-    const { isValid, payload, storedToken } = await this.verifyRefreshToken(oldRefreshToken);
+  async refreshTokens(
+    oldRefreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const { isValid, payload, storedToken } =
+      await this.verifyRefreshToken(oldRefreshToken);
 
     if (!isValid || !storedToken) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -38,12 +39,15 @@ export class TokenService {
     await this.revokeToken(oldRefreshToken, 'Token refreshed');
 
     // Generate new token pair with same device and chain them
-    const { accessToken, refreshToken } = await this.generateTokens(storedToken.user, {
-      deviceId: payload.deviceId,
-      ipAddress: storedToken.ipAddress,
-      userAgent: storedToken.userAgent,
-      previousToken: oldRefreshToken
-    });
+    const { accessToken, refreshToken } = await this.generateTokens(
+      storedToken.user,
+      {
+        deviceId: payload.deviceId,
+        ipAddress: storedToken.ipAddress,
+        userAgent: storedToken.userAgent,
+        previousToken: oldRefreshToken,
+      },
+    );
 
     return { accessToken, refreshToken };
   }

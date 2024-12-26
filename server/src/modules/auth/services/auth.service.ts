@@ -12,22 +12,22 @@ import { v4 as uuidv4 } from 'uuid';
 import { PasswordService } from './password.service';
 import { addMinutes, differenceInMinutes } from 'date-fns';
 import { LocationService } from './location.service';
-import {
-  AccountError,
-  AppError,
-  AuthenticationError,
-  AuthorizationError,
-  PasswordValidationError,
-  ValidationError,
-} from 'src/common/errors/custom-errors';
-import { ErrorCodes } from 'src/common/errors/error-codes';
-import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 import { CookieOptions, Response } from 'express';
 import { LoginResponse } from '../interfaces/auth.interfaces';
 import { TokenService } from './token.service';
 import { CookieConfigService } from './cookie-config.service';
 import { RedisService } from '@infrastructure/cache/redis.service';
 import { PerformanceService } from '@infrastructure/monitoring/performance.service';
+import {
+  AccountError,
+  AppError,
+  AuthenticationError,
+  AuthorizationError,
+  ErrorCodes,
+  ErrorHandlingService,
+  PasswordValidationError,
+  ValidationError,
+} from '@core/errors';
 export interface SessionOptions {
   maxSessions?: number;
   forceLogoutOthers?: boolean;
@@ -554,11 +554,17 @@ export class AuthService {
     if (refreshToken) {
       await this.tokenService.revokeToken(refreshToken, 'User logout');
     }
-    
+
     await this.sessionService.destroySession(sessionId);
-    
-    response.clearCookie('access_token', this.cookieConfigService.defaultOptions);
-    response.clearCookie('refresh_token', this.cookieConfigService.defaultOptions);
+
+    response.clearCookie(
+      'access_token',
+      this.cookieConfigService.defaultOptions,
+    );
+    response.clearCookie(
+      'refresh_token',
+      this.cookieConfigService.defaultOptions,
+    );
   }
 
   async logoutAll(userId: string) {
@@ -575,7 +581,7 @@ export class AuthService {
           email: registerDto.email,
           username: registerDto.username,
         });
-  
+
         if (existingUser) {
           this.performanceService.incrementCounter('duplicate_registrations');
           if (existingUser.email === registerDto.email) {
@@ -593,11 +599,11 @@ export class AuthService {
             );
           }
         }
-  
+
         const passwordValidation = await this.passwordService.validatePassword(
           registerDto.password,
         );
-  
+
         if (!passwordValidation.isValid) {
           throw new ValidationError(
             'Password validation failed',
@@ -608,13 +614,13 @@ export class AuthService {
             'register',
           );
         }
-  
+
         this.performanceService.incrementCounter('successful_registrations');
         const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-  
+
         const verificationToken = uuidv4();
         const verificationExpiry = addMinutes(new Date(), 60);
-  
+
         const user = await this.createUser({
           username: registerDto.username,
           email: registerDto.email,
@@ -624,24 +630,22 @@ export class AuthService {
           verificationToken,
           verificationExpiry,
         });
-  
+
         await this.savePasswordToHistory(user.id, hashedPassword);
         await this.mailerService.sendWelcome(user.email, user.username);
         await this.mailerService.sendEmailVerification(
           user.email,
           verificationToken,
         );
-  
+
         // Generate tokens
-        const { accessToken, refreshToken } = await this.tokenService.generateTokens(
-          user,
-          {
+        const { accessToken, refreshToken } =
+          await this.tokenService.generateTokens(user, {
             deviceId: uuidv4(), // Generate a new device ID for initial registration
             ipAddress: '127.0.0.1', // You might want to pass this from the controller
             userAgent: 'Initial Registration', // You might want to pass this from the controller
-          }
-        );
-  
+          });
+
         // Set cookies
         response.cookie(
           'access_token',
@@ -653,7 +657,7 @@ export class AuthService {
           refreshToken,
           this.cookieConfigService.refreshTokenOptions,
         );
-  
+
         return {
           user: {
             id: user.id,
@@ -689,8 +693,8 @@ export class AuthService {
       throw new UnauthorizedException({
         message: 'Verification token has expired',
         details: {
-          canRequestNew: true
-        }
+          canRequestNew: true,
+        },
       });
     }
 
@@ -810,11 +814,19 @@ export class AuthService {
   }
 
   async refreshToken(refreshToken: string, response: Response) {
-    const { accessToken, refreshToken: newRefreshToken } = 
+    const { accessToken, refreshToken: newRefreshToken } =
       await this.tokenService.refreshTokens(refreshToken);
 
-    response.cookie('access_token', accessToken, this.cookieConfigService.accessTokenOptions);
-    response.cookie('refresh_token', newRefreshToken, this.cookieConfigService.refreshTokenOptions);
+    response.cookie(
+      'access_token',
+      accessToken,
+      this.cookieConfigService.accessTokenOptions,
+    );
+    response.cookie(
+      'refresh_token',
+      newRefreshToken,
+      this.cookieConfigService.refreshTokenOptions,
+    );
 
     return { message: 'Tokens refreshed successfully' };
   }

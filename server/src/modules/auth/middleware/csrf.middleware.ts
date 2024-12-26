@@ -1,4 +1,8 @@
-import { Injectable, NestMiddleware, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NestMiddleware,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { CsrfService } from '../services/csrf.service';
 import { ConfigService } from '@nestjs/config';
@@ -15,7 +19,7 @@ export class CsrfMiddleware implements NestMiddleware {
     '/auth/resend-verification',
     '/auth/password-reset/request',
     '/auth/csrf-token',
-    '/health'
+    '/health',
   ]);
 
   private readonly SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -27,8 +31,8 @@ export class CsrfMiddleware implements NestMiddleware {
 
   private isPublicPath(path: string): boolean {
     const normalizedPath = path.toLowerCase();
-    return Array.from(this.PUBLIC_PATHS).some(publicPath => 
-      normalizedPath.startsWith(publicPath.toLowerCase())
+    return Array.from(this.PUBLIC_PATHS).some((publicPath) =>
+      normalizedPath.startsWith(publicPath.toLowerCase()),
     );
   }
 
@@ -56,23 +60,28 @@ export class CsrfMiddleware implements NestMiddleware {
           throw new UnauthorizedException('CSRF token missing');
         }
 
-        const isValid = await this.csrfService.validateToken(sessionId, csrfToken);
-        
+        const isValid = await this.csrfService.validateToken(
+          sessionId,
+          csrfToken,
+        );
+
         if (!isValid) {
-          this.logger.warn(`Invalid CSRF token detected for session ${sessionId}`);
+          this.logger.warn(
+            `Invalid CSRF token detected for session ${sessionId}`,
+          );
           throw new UnauthorizedException('Invalid CSRF token');
         }
 
         // Generate new token after successful validation for enhanced security
         const newToken = await this.csrfService.generateToken(sessionId);
-        
+
         // Set cookie with appropriate security flags
         res.cookie('csrf_token', newToken, {
           httpOnly: false, // Needs to be false so JS can read it
           secure: this.configService.get('NODE_ENV') === 'production',
           sameSite: 'strict',
           path: '/',
-          maxAge: 24 * 60 * 60 * 1000 // 24 hours
+          maxAge: 24 * 60 * 60 * 1000, // 24 hours
         });
       }
 

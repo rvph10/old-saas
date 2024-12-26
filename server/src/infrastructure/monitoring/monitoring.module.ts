@@ -1,8 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { PerformanceService } from './performance.service';
-import { CustomLoggerService } from './logger.service';
 import { MetricsService } from './metrics.service';
 import { ConfigService } from '@nestjs/config';
+import { CustomLoggerService } from '@infrastructure/logger/logger.service';
 
 @Global()
 @Module({

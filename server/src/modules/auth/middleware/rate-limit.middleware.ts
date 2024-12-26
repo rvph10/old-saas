@@ -6,17 +6,17 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { RedisService } from 'src/redis/redis.service';
 import { ConfigService } from '@nestjs/config';
+import { RedisService } from '@infrastructure/cache/redis.service';
 
 @Injectable()
 export class RateLimitMiddleware implements NestMiddleware {
   private readonly logger = new Logger(RateLimitMiddleware.name);
 
   private readonly defaultLimits = {
-    'auth/login': { limit: 5, windowSize: 300 },
-    'auth/register': { limit: 3, windowSize: 3600 },
-    'auth/password-reset': { limit: 3, windowSize: 3600 },
+    'auth/login': { limit: 15, windowSize: 300 },
+    'auth/register': { limit: 10, windowSize: 3600 },
+    'auth/password-reset': { limit: 5, windowSize: 3600 },
     default: { limit: 100, windowSize: 900 },
   };
 

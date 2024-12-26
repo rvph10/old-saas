@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { ConfigService } from '@nestjs/config';
-import { RedisService } from 'src/redis/redis.service';
 
 const ETHEREAL_CREDENTIALS = {
   user: 'anastasia.bashirian@ethereal.email',
@@ -15,18 +14,12 @@ export interface MailOptions {
   html?: string;
 }
 
-const ETHEREAL_CACHE_KEY = 'ethereal_account';
-const CACHE_TTL = 60 * 60 * 24 * 7; // 7 days
-
 @Injectable()
 export class MailerService {
   private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailerService.name);
 
-  constructor(
-    private configService: ConfigService,
-    private redisService: RedisService,
-  ) {}
+  constructor(private configService: ConfigService) {}
 
   async onModuleInit() {
     await this.initializeTransporter();
@@ -169,4 +162,3 @@ export class MailerService {
     });
   }
 }
-('');

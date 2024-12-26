@@ -8,10 +8,8 @@ import { RedisService } from '@infrastructure/cache/redis.service';
 import { v4 as uuidv4 } from 'uuid';
 import { DeviceService } from '../../auth/services/device.service';
 import { PerformanceService } from '@infrastructure/monitoring/performance.service';
-import { AppError, SessionError } from 'src/common/errors/custom-errors';
-import { ErrorCodes } from 'src/common/errors/error-codes';
-import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 import { CookieOptions, Response } from 'express';
+import { AppError, ErrorCodes, ErrorHandlingService, SessionError } from '@core/errors';
 
 interface SessionOptions {
   maxSessions?: number;
@@ -189,15 +187,11 @@ export class SessionService {
   }
 
   async revokeToken(jti: string): Promise<void> {
-    await this.redisService.set(
-      `revoked_token:${jti}`,
-      'true',
-      24 * 60 * 60
-    );
+    await this.redisService.set(`revoked_token:${jti}`, 'true', 24 * 60 * 60);
   }
-  
+
   async isTokenRevoked(jti: string): Promise<boolean> {
-    return await this.redisService.get(`revoked_token:${jti}`) !== null;
+    return (await this.redisService.get(`revoked_token:${jti}`)) !== null;
   }
 
   async revokeDeviceSessions(

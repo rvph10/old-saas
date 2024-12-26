@@ -1,25 +1,34 @@
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import { RedisModule } from '@infrastructure/cache/redis.module';
+import { MailModule } from '@modules/mail/mail.module';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { AuthController } from '../auth.controller';
-import { AuthService } from '../services/auth.service';
-import { JwtStrategy } from '../strategies/jwt.strategy';
-import { PrismaService } from '../../../prisma/prisma.service';
-import { RedisModule } from 'src/redis/redis.module';
-import { SessionService } from '../../session/services/session.service';
-import { MailModule } from '../../mail/mail.module';
-import { PerformanceService } from 'src/common/monitoring/performance.service';
-import { DeviceService } from '../services/device.service';
 import { DeviceModule } from './device.module';
-import { TwoFactorService } from '../services/two-factor.service';
-import { LocationService } from '../services/location.service';
-import { PasswordService } from '../services/password.service';
 import { ScheduleModule } from '@nestjs/schedule';
-import { TokenCleanupTask } from '../tasks/token-cleanup.task';
-import { TokenService } from '../services/token.service';
-import { CookieConfigService } from '../services/cookie-config.service';
-import { CsrfService } from '../services/csrf.service';
-import { CsrfMiddleware } from 'src/common/middleware/csrf.middleware';
+import { AuthController } from './controllers';
+import {
+  AuthService,
+  CookieConfigService,
+  CsrfService,
+  DeviceService,
+  LocationService,
+  PasswordService,
+  TokenService,
+  TwoFactorService,
+} from './services';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { PrismaService } from '@core/database/prisma.service';
+import { SessionService } from '@modules/session/services';
+import { PerformanceService } from '@infrastructure/monitoring/performance.service';
+import { TokenCleanupTask } from './tasks/token-cleanup.task';
+import { CsrfMiddleware } from '@core/middleware/csrf.middleware';
+import { SessionModule } from '@modules/session/session.module';
+import { ErrorHandlingService, ErrorModule } from '@core/errors';
 
 @Module({
   imports: [
@@ -35,6 +44,9 @@ import { CsrfMiddleware } from 'src/common/middleware/csrf.middleware';
         audience: 'nibblix-clients',
       },
     }),
+    SessionModule,
+    ErrorModule,
+
     ScheduleModule.forRoot(),
   ],
   controllers: [AuthController],
@@ -51,7 +63,8 @@ import { CsrfMiddleware } from 'src/common/middleware/csrf.middleware';
     TokenService,
     TokenCleanupTask,
     CookieConfigService,
-    CsrfService
+    CsrfService,
+    ErrorHandlingService
   ],
   exports: [
     AuthService,
@@ -59,7 +72,7 @@ import { CsrfMiddleware } from 'src/common/middleware/csrf.middleware';
     DeviceService,
     PasswordService,
     TokenService,
-    CsrfService
+    CsrfService,
   ],
 })
 export class AuthModule implements NestModule {

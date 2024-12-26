@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../../core/database/prisma.service';
-import { RedisService } from '../redis/redis.service';
 import { HealthCheckResult, HealthStatus, MemoryHealthCheck } from './types';
+import { PrismaService } from '@core/database/prisma.service';
+import { RedisService } from '@infrastructure/cache/redis.service';
 
 @Injectable()
 export class HealthService {

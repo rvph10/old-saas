@@ -26,7 +26,10 @@ export class SessionCleanupService {
       let lastKey = '0'; // Redis cursor for scanning
 
       do {
-        const [cursor, keys] = await this.scanSessions(lastKey, this.BATCH_SIZE);
+        const [cursor, keys] = await this.scanSessions(
+          lastKey,
+          this.BATCH_SIZE,
+        );
         lastKey = cursor;
 
         if (keys.length > 0) {
@@ -43,18 +46,23 @@ export class SessionCleanupService {
 
       const duration = Date.now() - startTime;
       this.recordMetrics(totalCleaned, duration);
-      this.logger.log(`Session cleanup completed. Removed ${totalCleaned} expired sessions in ${duration}ms`);
+      this.logger.log(
+        `Session cleanup completed. Removed ${totalCleaned} expired sessions in ${duration}ms`,
+      );
     } catch (error) {
       this.logger.error('Error during session cleanup:', error.stack);
       this.metricsService.incrementCounter('session_cleanup_errors');
     }
   }
 
-  private async scanSessions(cursor: string, count: number): Promise<[string, string[]]> {
+  private async scanSessions(
+    cursor: string,
+    count: number,
+  ): Promise<[string, string[]]> {
     const client = this.redisService.getClient();
     const [nextCursor, keys] = await client.scan(cursor, {
       MATCH: `${this.SESSION_PREFIX}*`,
-      COUNT: count
+      COUNT: count,
     });
     return [nextCursor, keys];
   }
@@ -77,17 +85,19 @@ export class SessionCleanupService {
     const batchSize = 100;
     for (let i = 0; i < keys.length; i += batchSize) {
       const batch = keys.slice(i, i + batchSize);
-      await Promise.all(batch.map(key => this.redisService.del(key)));
+      await Promise.all(batch.map((key) => this.redisService.del(key)));
     }
   }
 
   private recordMetrics(totalCleaned: number, duration: number) {
-    this.metricsService.incrementCounter('sessions_cleaned_total', { count: totalCleaned });
+    this.metricsService.incrementCounter('sessions_cleaned_total', {
+      count: totalCleaned,
+    });
     this.metricsService.recordHttpRequest(
       'CLEANUP',
       'sessions',
       200,
-      duration / 1000
+      duration / 1000,
     );
   }
 

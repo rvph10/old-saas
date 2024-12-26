@@ -1,21 +1,38 @@
 import { Module } from '@nestjs/common';
-import { RedisModule } from 'src/redis/redis.module';
-import { DeviceModule } from '../module/device.module';
-import { MonitoringModule } from 'src/common/monitoring/monitoring.module';
-import { ErrorModule } from 'src/common/errors/error.module';
 import { SessionMiddleware } from './session.middleware';
 import { RateLimitMiddleware } from './rate-limit.middleware';
 import { RequestLoggerMiddleware } from './request-logger.middleware';
 import { SessionService } from '../../session/services/session.service';
+import { RedisModule } from '@infrastructure/cache/redis.module';
+import { DeviceModule } from '../device.module';
+import { ErrorHandlingService, ErrorModule } from '@core/errors';
+import { MonitoringModule } from '@infrastructure/monitoring/monitoring.module';
+import { ConfigModule } from '@nestjs/config';
+import { MetricsService } from '@infrastructure/monitoring/metrics.service';
+import { SessionModule } from '@modules/session/session.module';
+
 
 @Module({
-  imports: [RedisModule, DeviceModule, ErrorModule, MonitoringModule],
+  imports: [
+    RedisModule,
+    DeviceModule,
+    ErrorModule,
+    MonitoringModule,
+    ConfigModule,
+    SessionModule
+  ],
   providers: [
     SessionMiddleware,
     RateLimitMiddleware,
     RequestLoggerMiddleware,
     SessionService,
+    ErrorHandlingService,
+    MetricsService
   ],
-  exports: [SessionMiddleware, RateLimitMiddleware, RequestLoggerMiddleware],
+  exports: [
+    SessionMiddleware,
+    RateLimitMiddleware,
+    RequestLoggerMiddleware
+  ],
 })
 export class MiddlewareModule {}

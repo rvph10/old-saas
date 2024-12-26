@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { UAParser } from 'ua-parser-js';
 import * as crypto from 'crypto';
-import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
+import { ErrorHandlingService } from '@core/errors';
 
 export interface DeviceInfo {
   deviceId: string;

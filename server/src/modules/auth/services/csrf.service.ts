@@ -1,6 +1,7 @@
+import { RedisService } from '@infrastructure/cache/redis.service';
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { RedisService } from 'src/redis/redis.service';
+
 
 @Injectable()
 export class CsrfService {
