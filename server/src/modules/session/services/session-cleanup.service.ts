@@ -9,7 +9,7 @@ import { RedisService } from '@infrastructure/cache/redis.service';
 export class SessionCleanupService {
   private readonly logger = new Logger(SessionCleanupService.name);
   private readonly SESSION_PREFIX = 'session:';
-  private readonly BATCH_SIZE = 1000; // Process sessions in batches
+  private readonly BATCH_SIZE = 1000;
 
   constructor(
     private readonly redisService: RedisService,
@@ -23,14 +23,23 @@ export class SessionCleanupService {
       this.logger.log('Starting expired session cleanup');
       const startTime = Date.now();
       let totalCleaned = 0;
-      let lastKey = '0'; // Redis cursor for scanning
-
+      let cursor = 0;
+      
       do {
-        const [cursor, keys] = await this.scanSessions(
-          lastKey,
-          this.BATCH_SIZE,
+        // Get Redis client
+        const client = this.redisService.getClient();
+        
+        // Perform SCAN operation
+        const [nextCursor, keys] = await client.scan(
+          cursor,
+          'MATCH',
+          `${this.SESSION_PREFIX}*`,
+          'COUNT',
+          this.BATCH_SIZE
         );
-        lastKey = cursor;
+
+        // Update cursor
+        cursor = parseInt(nextCursor);
 
         if (keys.length > 0) {
           const expiredKeys = await this.filterExpiredKeys(keys);
@@ -41,7 +50,7 @@ export class SessionCleanupService {
         }
 
         // Break if we've processed all keys
-        if (cursor === '0') break;
+        if (cursor === 0) break;
       } while (true);
 
       const duration = Date.now() - startTime;
@@ -53,18 +62,6 @@ export class SessionCleanupService {
       this.logger.error('Error during session cleanup:', error.stack);
       this.metricsService.incrementCounter('session_cleanup_errors');
     }
-  }
-
-  private async scanSessions(
-    cursor: string,
-    count: number,
-  ): Promise<[string, string[]]> {
-    const client = this.redisService.getClient();
-    const [nextCursor, keys] = await client.scan(cursor, {
-      MATCH: `${this.SESSION_PREFIX}*`,
-      COUNT: count,
-    });
-    return [nextCursor, keys];
   }
 
   private async filterExpiredKeys(keys: string[]): Promise<string[]> {
@@ -81,7 +78,6 @@ export class SessionCleanupService {
   private async deleteExpiredSessions(keys: string[]): Promise<void> {
     if (keys.length === 0) return;
 
-    // Delete in batches to avoid blocking Redis
     const batchSize = 100;
     for (let i = 0; i < keys.length; i += batchSize) {
       const batch = keys.slice(i, i + batchSize);
