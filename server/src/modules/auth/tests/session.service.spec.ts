@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { SessionService } from '../services/session.service';
+import { SessionService } from '../../session/services/session.service';
 import { RedisService } from '../../../redis/redis.service';
 import { DeviceService } from '../services/device.service';
 import { PerformanceService } from '../../../common/monitoring/performance.service';

@@ -4,7 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { SessionService } from '../services/session.service';
+import { SessionService } from '../../session/services/session.service';
 import { RedisService } from '../../../redis/redis.service';
 import { MailerService } from '../../mail/mail.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';

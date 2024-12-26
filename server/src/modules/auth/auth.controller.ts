@@ -21,7 +21,7 @@ import { RegisterDto } from './dto/register.dto';
 import { RequestResetDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
-import { SessionService } from './services/session.service';
+import { SessionService } from '../session/services/session.service';
 import { SessionGuard } from './guard/session.guard';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { ResendVerificationDto, VerifyEmailDto } from './dto/verifiy-email.dto';

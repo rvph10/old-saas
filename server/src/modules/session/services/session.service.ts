@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { RedisService } from 'src/redis/redis.service';
 import { v4 as uuidv4 } from 'uuid';
-import { DeviceService } from './device.service';
+import { DeviceService } from '../../auth/services/device.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { AppError, SessionError } from 'src/common/errors/custom-errors';
 import { ErrorCodes } from 'src/common/errors/error-codes';

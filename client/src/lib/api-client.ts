@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
+import { ErrorHandler } from './errors/error-handler';
 
 export interface AuthResponse {
   user?: {
@@ -92,39 +93,15 @@ apiClient.interceptors.response.use(
     }
     return response;
   },
-  async (error: AxiosError) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Response Error:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message
-      });
+  async (error) => {
+    const errorResponse = ErrorHandler.handleError(error);
+    
+    // Show toast for user-facing errors
+    if (error.config?.showError !== false) {
+      ErrorHandler.showErrorToast(errorResponse);
     }
 
-    if (error.code === 'ECONNABORTED') {
-      throw new Error('Request timeout: Server is not responding');
-    }
-
-    if (!error.response) {
-      throw new Error('Network error: Please check your connection');
-    }
-
-    // Handle specific error codes
-    switch (error.response.status) {
-      case 401:
-        clearAuthState();
-        break;
-      case 403:
-        throw new Error('Access denied. Please check your permissions.');
-      case 404:
-        throw new Error('Resource not found.');
-      case 500:
-        throw new Error('Server error. Please try again later.');
-    }
-
-    // If no specific error handling, throw the original error
-    throw error;
+    return Promise.reject(errorResponse);
   }
 );
 
@@ -158,6 +135,7 @@ export const authApi = {
     firstName?: string;
     lastName?: string;
   }) => {
+    console.log('Registering:', data);
     return apiClient.post('/auth/register', data);
   },
 

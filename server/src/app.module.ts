@@ -26,6 +26,8 @@ import { ErrorModule } from './common/errors/error.module';
 import { RequestSanitizerMiddleware } from './common/security/request-sanitizer.middleware';
 import * as cookieParser from 'cookie-parser';
 import { RefreshTokenMiddleware } from './modules/auth/middleware/refresh-token.middleware';
+import { SessionModule } from './modules/session/session.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -48,6 +50,8 @@ import { RefreshTokenMiddleware } from './modules/auth/middleware/refresh-token.
     AuthModule,
     HealthModule,
     ErrorModule,
+    SessionModule,
+    ScheduleModule.forRoot()
   ],
   controllers: [HealthController],
   providers: [

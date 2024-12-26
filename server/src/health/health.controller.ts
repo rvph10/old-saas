@@ -14,7 +14,6 @@ export class HealthController {
   > {
     try {
       const healthCheck = await this.healthService.checkHealth();
-      this.logger.debug('Health check completed', healthCheck);
       return healthCheck;
     } catch (error) {
       this.logger.error('Health check failed', error.stack);

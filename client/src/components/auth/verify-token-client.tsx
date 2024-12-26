@@ -24,30 +24,44 @@ export default function VerifyTokenClient({
 
   useEffect(() => {
     const verifyToken = async () => {
-        if (verificationAttempted.current) return;
+      if (verificationAttempted.current) return;
       
       verificationAttempted.current = true;
       try {
-        await verifyEmail.mutateAsync(token);
-        setVerificationState('success');
-        toast({
-          title: 'Email Verified',
-          description: 'Your email has been successfully verified.',
-          variant: 'success',
-        });
-      } catch (error) {
+        setVerificationState('verifying');
+        const response = await verifyEmail.mutateAsync(token);
+        
+        if (response.message === 'Email verified successfully') {
+          setVerificationState('success');
+          toast({
+            title: 'Email Verified',
+            description: 'Your email has been successfully verified.',
+            variant: 'success',
+          });
+        } else {
+          setVerificationState('error');
+          toast({
+            title: 'Verification Failed',
+            description: response.message,
+            variant: 'destructive',
+          });
+        }
+      } catch (error: any) {
         setVerificationState('error');
+        const canRequestNew = error.response?.data?.details?.canRequestNew;
+        
         toast({
           title: 'Verification Failed',
-          description:
-            'Unable to verify your email. The link may have expired or is invalid.',
+          description: canRequestNew 
+            ? 'Your verification link has expired. Please request a new one.'
+            : 'Unable to verify your email. The link may be invalid.',
           variant: 'destructive',
         });
       }
     };
 
     verifyToken();
-  }, []);
+  }, [token, toast, verifyEmail]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">

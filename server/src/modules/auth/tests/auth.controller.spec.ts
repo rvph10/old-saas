@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../services/auth.service';
-import { SessionService } from '../services/session.service';
+import { SessionService } from '../../session/services/session.service';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { DeviceService } from '../services/device.service';

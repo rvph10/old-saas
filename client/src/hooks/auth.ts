@@ -43,8 +43,8 @@ export function useLogin() {
 export function useRegister() {
   const router = useRouter();
 
-  return useMutation<any, Error, RegisterInput>({
-    mutationFn: async (data: { email: string; username: string; confirmPassword: string; password: string; firstName?: string; lastName?: string; }) => {
+  return useMutation<any, Error, Omit<RegisterInput, 'confirmPassword'>>({
+    mutationFn: async (data: { email: string; username: string; password: string; firstName?: string; lastName?: string; }) => {
       const result = await Promise.race<any>([
         authApi.register(data),
         timeoutPromise(),
@@ -85,14 +85,11 @@ export function useLogout() {
 }
 
 export function useVerifyEmail() {
-  return useMutation<any, Error, string>({
+  return useMutation({
     mutationFn: async (token: string) => {
-      const result = await Promise.race<any>([
-        authApi.verifyEmail(token),
-        timeoutPromise(),
-      ]);
-      return result;
-    },
+      const result = await authApi.verifyEmail(token);
+      return result.data;
+    }
   });
 }
 

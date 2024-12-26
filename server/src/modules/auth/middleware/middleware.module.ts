@@ -6,7 +6,7 @@ import { ErrorModule } from 'src/common/errors/error.module';
 import { SessionMiddleware } from './session.middleware';
 import { RateLimitMiddleware } from './rate-limit.middleware';
 import { RequestLoggerMiddleware } from './request-logger.middleware';
-import { SessionService } from '../services/session.service';
+import { SessionService } from '../../session/services/session.service';
 
 @Module({
   imports: [RedisModule, DeviceModule, ErrorModule, MonitoringModule],

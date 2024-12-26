@@ -6,7 +6,7 @@ import { AuthService } from '../services/auth.service';
 import { JwtStrategy } from '../strategies/jwt.strategy';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { RedisModule } from 'src/redis/redis.module';
-import { SessionService } from '../services/session.service';
+import { SessionService } from '../../session/services/session.service';
 import { MailModule } from '../../mail/mail.module';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { DeviceService } from '../services/device.service';

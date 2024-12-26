@@ -1,9 +1,9 @@
 import VerifyTokenClient from '../../../../components/auth/verify-token-client';
 
-export default function VerifyTokenPage({
-  params,
-}: {
-  params: { token: string };
-}) {
+type Props = {
+  params: { token: string }
+}
+
+export default async function VerifyTokenPage({ params }: Props) {
   return <VerifyTokenClient token={params.token} />;
 }

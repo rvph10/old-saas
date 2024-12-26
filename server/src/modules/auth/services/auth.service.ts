@@ -5,7 +5,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import * as bcrypt from 'bcryptjs';
-import { SessionService } from './session.service';
+import { SessionService } from '../../session/services/session.service';
 import { RedisService } from '../../../redis/redis.service';
 import { ResetPasswordDto } from '../dto/password-reset.dto';
 import { MailerService } from '../../mail/mail.service';
@@ -613,7 +613,7 @@ export class AuthService {
         const hashedPassword = await bcrypt.hash(registerDto.password, 10);
   
         const verificationToken = uuidv4();
-        const verificationExpiry = addMinutes(new Date(), 15);
+        const verificationExpiry = addMinutes(new Date(), 60);
   
         const user = await this.createUser({
           username: registerDto.username,
@@ -686,7 +686,12 @@ export class AuthService {
     }
 
     if (user.verificationExpiry && new Date() > user.verificationExpiry) {
-      throw new UnauthorizedException('Verification token has expired');
+      throw new UnauthorizedException({
+        message: 'Verification token has expired',
+        details: {
+          canRequestNew: true
+        }
+      });
     }
 
     await this.prisma.user.update({
@@ -720,7 +725,7 @@ export class AuthService {
 
     // Generate new verification token
     const verificationToken = uuidv4();
-    const verificationExpiry = addMinutes(new Date(), 15);
+    const verificationExpiry = addMinutes(new Date(), 60);
     await this.prisma.user.update({
       where: { id: user.id },
       data: {

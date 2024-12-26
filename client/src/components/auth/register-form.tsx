@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useRegister } from '@/hooks/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -22,7 +21,6 @@ import Link from 'next/link';
 import { FiEye, FiEyeOff } from 'react-icons/fi';
 
 export function RegisterForm() {
-  const router = useRouter();
   const { toast } = useToast();
   const register = useRegister();
   const [isLoading, setIsLoading] = useState(false);
@@ -43,7 +41,8 @@ export function RegisterForm() {
   async function onSubmit(data: RegisterInput) {
     try {
       setIsLoading(true);
-      await register.mutateAsync(data);
+      const { confirmPassword, ...registerData } = data;
+      await register.mutateAsync(registerData);
       toast({
         title: 'Registration Successful',
         description: "Please check your email to verify your account.",
