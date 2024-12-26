@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
 import { ErrorHandler } from './errors/error-handler';
 
 export interface AuthResponse {

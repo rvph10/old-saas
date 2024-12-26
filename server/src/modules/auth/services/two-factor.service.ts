@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/database/prisma.service';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import { AppError, TwoFactorError } from '../../../common/errors/custom-errors';

@@ -1,18 +1,16 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/database/prisma.service';
 import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../../session/services/session.service';
-import { RedisService } from '../../../redis/redis.service';
 import { ResetPasswordDto } from '../dto/password-reset.dto';
 import { MailerService } from '../../mail/mail.service';
 import { v4 as uuidv4 } from 'uuid';
 import { PasswordService } from './password.service';
 import { addMinutes, differenceInMinutes } from 'date-fns';
-import { PerformanceService } from '../../../common/monitoring/performance.service';
 import { LocationService } from './location.service';
 import {
   AccountError,
@@ -28,6 +26,8 @@ import { CookieOptions, Response } from 'express';
 import { LoginResponse } from '../interfaces/auth.interfaces';
 import { TokenService } from './token.service';
 import { CookieConfigService } from './cookie-config.service';
+import { RedisService } from '@infrastructure/cache/redis.service';
+import { PerformanceService } from '@infrastructure/monitoring/performance.service';
 export interface SessionOptions {
   maxSessions?: number;
   forceLogoutOthers?: boolean;

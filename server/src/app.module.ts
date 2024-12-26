@@ -6,28 +6,27 @@ import {
   RequestMethod,
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaModule } from './prisma/prisma.module';
-import configuration from './config/configuration';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AuthModule } from './modules/auth/module/auth.module';
 import { SessionMiddleware } from './modules/auth/middleware/session.middleware';
 import { RateLimitMiddleware } from './modules/auth/middleware/rate-limit.middleware';
-import { RedisModule } from './redis/redis.module';
-import { PrismaService } from './prisma/prisma.service';
-import { MiddlewareModule } from './modules/middleware/middleware.module';
-import { HealthController } from './health/health.controller';
+import { PrismaService } from './core/database/prisma.service';
 import { MailModule } from './modules/mail/mail.module';
-import { ErrorHandlingService } from './common/errors/error-handling.service';
 import { APP_INTERCEPTOR } from '@nestjs/core';
-import { MonitoringModule } from './common/monitoring/monitoring.module';
-import { MetricsService } from './common/monitoring/metrics.service';
-import { HealthModule } from './health/health.module';
-import { ErrorModule } from './common/errors/error.module';
-import { RequestSanitizerMiddleware } from './common/security/request-sanitizer.middleware';
 import * as cookieParser from 'cookie-parser';
 import { RefreshTokenMiddleware } from './modules/auth/middleware/refresh-token.middleware';
 import { SessionModule } from './modules/session/session.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import configuration from '@core/config/configuration';
+import { AuthModule } from '@modules/auth/auth.module';
+import { RedisModule } from '@infrastructure/cache/redis.module';
+import { MonitoringModule } from '@infrastructure/monitoring/monitoring.module';
+import { MetricsService } from '@infrastructure/monitoring/metrics.service';
+import { RequestSanitizerMiddleware } from '@core/security/request-sanitizer.middleware';
+import { PrismaModule } from '@core/database/prisma.module';
+import { MiddlewareModule } from '@modules/auth/middleware/middleware.module';
+import { HealthModule } from '@modules/health/health.module';
+import { ErrorHandlingService, ErrorModule } from '@core/errors';
+import { HealthController } from '@modules/health/health.controller';
 
 @Module({
   imports: [

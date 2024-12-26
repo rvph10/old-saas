@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { RedisService } from 'src/redis/redis.service';
 
 import { ConfigService } from '@nestjs/config';
-import { MetricsService } from 'src/common/monitoring/metrics.service';
+import { MetricsService } from '@infrastructure/monitoring/metrics.service';
+import { RedisService } from '@infrastructure/cache/redis.service';
 
 @Injectable()
 export class SessionCleanupService {

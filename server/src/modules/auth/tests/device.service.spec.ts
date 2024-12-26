@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DeviceService } from '../services/device.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/database/prisma.service';
 import { UAParser } from 'ua-parser-js';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 import { DatabaseError } from 'src/common/errors/custom-errors';

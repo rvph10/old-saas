@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/database/prisma.service';
 import * as geoip from 'geoip-lite';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 import { AppError, ValidationError } from 'src/common/errors/custom-errors';

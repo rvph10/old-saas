@@ -4,10 +4,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { RedisService } from 'src/redis/redis.service';
+import { RedisService } from '@infrastructure/cache/redis.service';
 import { v4 as uuidv4 } from 'uuid';
 import { DeviceService } from '../../auth/services/device.service';
-import { PerformanceService } from 'src/common/monitoring/performance.service';
+import { PerformanceService } from '@infrastructure/monitoring/performance.service';
 import { AppError, SessionError } from 'src/common/errors/custom-errors';
 import { ErrorCodes } from 'src/common/errors/error-codes';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';

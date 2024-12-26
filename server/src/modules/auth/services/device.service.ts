@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/database/prisma.service';
 import { UAParser } from 'ua-parser-js';
 import * as crypto from 'crypto';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';

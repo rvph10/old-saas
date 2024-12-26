@@ -15,6 +15,20 @@
     "skipLibCheck": true,
     "strictNullChecks": false,
     "noImplicitAny": false,
+    "paths": {
+      "@modules/*": [
+        "src/modules/*"
+      ],
+      "@core/*": [
+        "src/core/*"
+      ],
+      "@common/*": [
+        "src/common/*"
+      ],
+      "@infrastructure/*": [
+        "src/infrastructure/*"
+      ]
+    },
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false

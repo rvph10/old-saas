@@ -1,7 +1,7 @@
 // src/modules/auth/services/token.service.ts
 
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/database/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { LocationService } from '../services/location.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/database/prisma.service';
 import * as geoip from 'geoip-lite';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 

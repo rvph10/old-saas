@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TwoFactorService } from '../services/two-factor.service';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/database/prisma.service';
 import * as speakeasy from 'speakeasy';
 import { ErrorHandlingService } from 'src/common/errors/error-handling.service';
 import { TwoFactorError } from 'src/common/errors/custom-errors';
