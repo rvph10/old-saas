@@ -1,4 +1,4 @@
-import axios, { AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosHeaders, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 import { ErrorHandler } from './errors/error-handler';
 
 export interface AuthResponse {
@@ -12,6 +12,10 @@ export interface AuthResponse {
   sessionId?: string;
   requires2FA?: boolean;
   tempToken?: string;
+}
+
+interface CustomRequestConfig extends AxiosRequestConfig {
+  showError?: boolean;
 }
 
 const TIMEOUT_DURATION = 10000;
@@ -151,11 +155,31 @@ export const authApi = {
   },
 
   refreshToken: async () => {
-    return apiClient.post('/auth/refresh');
+    try {
+      const response = await apiClient.post<AuthResponse>('/auth/refresh', {}, {
+        headers: {
+          'x-skip-csrf': 'true'
+        },
+        showError: false
+      } as CustomRequestConfig);
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 403) {
+        clearAuthState();
+      }
+      throw error;
+    }
   },
 
-  verifyEmail: async (token: string) => 
-    apiClient.post('/auth/verify-email', { token }),
+  verifyEmail: async (token: string) => {
+    try {
+      const response = await apiClient.post('/auth/verify-email', { token });
+      return response.data;
+    } catch (error) {
+      console.error('Verification failed: ' + error);
+      throw error;
+    }
+  },
 
   resendVerification: async (email: string) => 
     apiClient.post('/auth/resend-verification', { email }),

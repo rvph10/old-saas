@@ -9,12 +9,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   imports: [
     CacheModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        store: redisStore as any,
-        url: configService.get('REDIS_URL') || 'redis://redis:6379',
-        isGlobal: true,
-        ttl: 60 * 60 * 24, // 24 hours
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const config = {
+          store: redisStore as any,
+          url: configService.get('REDIS_URL') || 'redis://redis:6379',
+          isGlobal: true,
+          ttl: 60 * 60 * 24, // 24 hours
+          retryStrategy: (times: number) => Math.min(times * 50, 2000),
+        };
+        return config;
+      },
       inject: [ConfigService],
     }),
   ],

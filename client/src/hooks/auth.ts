@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { authApi, AuthResponse } from '@/lib/api-client';
+import apiClient, { authApi, AuthResponse } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { RegisterInput } from '@/lib/validations/auth';
 import axios from 'axios';
 import React from 'react';
+import { LucideToggleLeft } from 'lucide-react';
+import { logger } from '@/utils/logger';
 
 const TIMEOUT_DURATION = 10000;
 
@@ -87,8 +89,13 @@ export function useLogout() {
 export function useVerifyEmail() {
   return useMutation({
     mutationFn: async (token: string) => {
-      const result = await authApi.verifyEmail(token);
-      return result.data;
+      try {
+        const response = await authApi.verifyEmail(token);
+        return response;
+      } catch (error) {
+        console.error('Verification failed:', error);
+        throw error;
+      }
     }
   });
 }

@@ -5,7 +5,15 @@ import { useRouter, usePathname } from 'next/navigation';
 import { authApi } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 
-const publicPaths = ['/', '/auth/login', '/auth/register', '/auth/verify-email', '/auth/verify-email/request'];
+const publicPaths = [
+  '/', 
+  '/auth/login', 
+  '/auth/register', 
+  '/auth/verify-email',
+  '/auth/verify',
+  '/auth/verify-email/request',
+  '/auth/refresh'
+];
 
 export function RefreshTokenHandler() {
   const router = useRouter();
@@ -14,17 +22,21 @@ export function RefreshTokenHandler() {
 
   const refreshToken = useCallback(async () => {
     if (publicPaths.includes(pathname)) return;
+    const hasRefreshToken = document.cookie.includes('refresh_token=');
+    if (!hasRefreshToken) return;
     
     try {
       await authApi.refreshToken();
     } catch (error) {
-      console.error('Token refresh failed:', error);
-      toast({
-        title: 'Session Expired',
-        description: 'Please login again',
-        variant: 'destructive',
-      });
-      router.push('/auth/login');
+      if (!publicPaths.includes(pathname)) {
+        console.error('Token refresh failed:', error);
+        toast({
+          title: 'Session Expired',
+          description: 'Please login again',
+          variant: 'destructive',
+        });
+        router.push('/auth/login');
+      }
     }
   }, [router, toast, pathname]);
 

@@ -23,23 +23,20 @@ export class SessionCleanupService {
       this.logger.log('Starting expired session cleanup');
       const startTime = Date.now();
       let totalCleaned = 0;
-      let cursor = 0;
+      let cursor = '0';
       
+      const client = this.redisService.getClient();
+
       do {
-        // Get Redis client
-        const client = this.redisService.getClient();
-        
-        // Perform SCAN operation
         const [nextCursor, keys] = await client.scan(
           cursor,
-          'MATCH',
-          `${this.SESSION_PREFIX}*`,
-          'COUNT',
-          this.BATCH_SIZE
+          {
+            MATCH: `${this.SESSION_PREFIX}*`,
+            COUNT: this.BATCH_SIZE
+          }
         );
 
-        // Update cursor
-        cursor = parseInt(nextCursor);
+        cursor = nextCursor;
 
         if (keys.length > 0) {
           const expiredKeys = await this.filterExpiredKeys(keys);
@@ -48,10 +45,7 @@ export class SessionCleanupService {
             totalCleaned += expiredKeys.length;
           }
         }
-
-        // Break if we've processed all keys
-        if (cursor === 0) break;
-      } while (true);
+      } while (cursor !== '0');
 
       const duration = Date.now() - startTime;
       this.recordMetrics(totalCleaned, duration);

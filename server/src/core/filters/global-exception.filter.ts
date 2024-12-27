@@ -87,15 +87,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     return 500;
   }
 
-  private handleUnknownError(error: Error) {
-    return {
-      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: 'Internal server error',
-      code: 'INTERNAL_ERROR',
-      details: error.message,
-    };
-  }
-
   private logError(
     request: Request,
     errorResponse: any,

@@ -29,6 +29,7 @@ import { TokenCleanupTask } from './tasks/token-cleanup.task';
 import { CsrfMiddleware } from '@core/middleware/csrf.middleware';
 import { SessionModule } from '@modules/session/session.module';
 import { ErrorHandlingService, ErrorModule } from '@core/errors';
+import { forwardRef } from '@nestjs/common';
 
 @Module({
   imports: [
@@ -44,9 +45,8 @@ import { ErrorHandlingService, ErrorModule } from '@core/errors';
         audience: 'nibblix-clients',
       },
     }),
-    SessionModule,
+    forwardRef(() => SessionModule),
     ErrorModule,
-
     ScheduleModule.forRoot(),
   ],
   controllers: [AuthController],
