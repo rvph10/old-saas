@@ -1,10 +1,6 @@
-import { SessionService } from '@modules/session/services';
-import {
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { SessionService } from "@modules/session/services";
+import { ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import { AuthGuard } from "@nestjs/passport";
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -16,8 +12,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     try {
       const request = context.switchToHttp().getRequest();
       
-      // First check session
-      const sessionId = request.headers['session-id'];
+      // Check both headers and cookies for session ID
+      const sessionId = request.headers['session-id'] || request.cookies['session_id'];
+      
       if (!sessionId) {
         throw new UnauthorizedException('No session ID provided');
       }
@@ -33,20 +30,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         throw new UnauthorizedException('No access token found');
       }
 
-      const result = (await super.canActivate(context)) as boolean;
-      return result;
+      return (await super.canActivate(context)) as boolean;
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
       throw new UnauthorizedException('Authentication failed');
     }
-  }
-
-  handleRequest(err: any, user: any) {
-    if (err || !user) {
-      throw new UnauthorizedException('Please log in to access this resource');
-    }
-    return user;
   }
 }

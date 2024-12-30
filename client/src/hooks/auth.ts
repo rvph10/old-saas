@@ -19,22 +19,12 @@ export function useLogin() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  return useMutation<
-    AuthResponse,
-    Error,
-    { username: string; password: string }
-  >({
+  return useMutation<AuthResponse, Error, { username: string; password: string }>({
     mutationFn: async (credentials) => {
       const result = await Promise.race<AuthResponse>([
         authApi.login(credentials),
         timeoutPromise(),
       ]);
-
-      // Store sessionId if provided
-      if (result.sessionId) {
-        localStorage.setItem('sessionId', result.sessionId);
-      }
-
       return result;
     },
     onSuccess: (data) => {
@@ -76,19 +66,7 @@ export function useLogout() {
 
   return useMutation<void, Error, void>({
     mutationFn: async () => {
-      const sessionId = localStorage.getItem('sessionId');
-      if (!sessionId) throw new Error('No active session');
-
       await authApi.logout();
-      localStorage.removeItem('sessionId');
-
-      // Clear cookies by setting expired date
-      document.cookie =
-        'access_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
-      document.cookie =
-        'refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
-      document.cookie =
-        'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
     },
     onSuccess: () => {
       queryClient.clear();
@@ -173,7 +151,6 @@ export function useUser() {
         return result.data;
       } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 401) {
-          localStorage.removeItem('sessionId');
           if (!window.location.pathname.includes('/auth/login')) {
             router.push('/auth/login');
           }

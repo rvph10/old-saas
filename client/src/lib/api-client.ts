@@ -25,7 +25,7 @@ interface CustomRequestConfig extends AxiosRequestConfig {
 const TIMEOUT_DURATION = 10000;
 
 const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: 'http://192.168.129.200:5000',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -35,17 +35,21 @@ const apiClient = axios.create({
 });
 
 const clearAuthState = () => {
-  localStorage.removeItem('sessionId');
-  const cookies = ['access_token', 'refresh_token', 'csrf_token'];
-  cookies.forEach((cookie) => {
-    document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+  const cookies = [
+    'session_id',
+    'access_token', 
+    'refresh_token', 
+    'csrf_token'
+  ];
+  
+  cookies.forEach((cookieName) => {
+    document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure; samesite=strict`;
   });
 };
 
 // Request interceptor
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
-    // Initialize headers as AxiosHeaders if not exist
     if (!config.headers) {
       config.headers = new AxiosHeaders();
     }
@@ -54,37 +58,32 @@ apiClient.interceptors.request.use(
     config.headers.set('Content-Type', 'application/json');
     config.headers.set('Access-Control-Allow-Credentials', 'true');
 
+    const sessionId = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('session_id='))
+      ?.split('=')[1];
+
+      if (sessionId) {
+        config.headers.set('session-id', sessionId);
+      } else {
+        console.debug('No session ID found in cookies:', document.cookie);
+      }
+
     // Get CSRF token from cookie
     const csrfToken = document.cookie
       .split('; ')
-      .find((row) => row.startsWith('csrf_token='))
+      .find(row => row.startsWith('csrf_token='))
       ?.split('=')[1];
 
     if (csrfToken) {
       config.headers.set('x-csrf-token', csrfToken);
     }
 
-    // Add session ID from storage if available
-    const sessionId = localStorage.getItem('sessionId');
-    if (sessionId) {
-      config.headers.set('session-id', sessionId);
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('Request:', {
-        url: config.url,
-        method: config.method,
-        headers: config.headers,
-        data: config.data,
-      });
-    }
-
     return config;
   },
   (error) => {
-    console.error('Request Error:', error);
     return Promise.reject(error);
-  },
+  }
 );
 
 // Response interceptor
@@ -98,6 +97,8 @@ apiClient.interceptors.response.use(
         headers: response.headers,
       });
     }
+    console.log('Response headers:', response.headers);
+    console.log('Cookies after response:', document.cookie);
     return response;
   },
   async (error) => {
@@ -123,11 +124,6 @@ export const authApi = {
         '/auth/login',
         credentials,
       );
-
-      if (response.data.sessionId) {
-        localStorage.setItem('sessionId', response.data.sessionId);
-      }
-
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -152,7 +148,7 @@ export const authApi = {
   logout: async () => {
     try {
       const response = await apiClient.post('/auth/logout');
-      localStorage.removeItem('sessionId');
+      clearAuthState();
       return response.data;
     } catch (error) {
       console.error('Logout error:', error);

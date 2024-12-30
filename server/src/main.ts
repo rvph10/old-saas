@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import session, * as expressSession from 'express-session';
+import * as expressSession from 'express-session';
 import * as cookieParser from 'cookie-parser';
 import { CustomLoggerService } from '@infrastructure/logger/logger.service';
 import { MetricsService } from '@infrastructure/monitoring/metrics.service';
@@ -72,13 +72,14 @@ async function bootstrap() {
       resave: true,
       saveUninitialized: true,
       rolling: true,
-      name: 'sid',
+      name: 'session_id',
       cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        sameSite: 'lax',
         domain: process.env.COOKIE_DOMAIN || undefined,
+        path: '/',
       },
     }),
   );

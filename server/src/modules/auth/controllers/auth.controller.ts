@@ -36,16 +36,18 @@ import {
   Verify2FADto,
   VerifyEmailDto,
 } from '../dto';
-import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { LoginResponse } from '../interfaces';
 import { CookieOptions, Request, Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger: LoggerService = new Logger(AuthController.name);
   private readonly cookieOptions: CookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
+    domain: process.env.COOKIE_DOMAIN || undefined,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/',
   };
@@ -122,34 +124,44 @@ export class AuthController {
   }
 
   @Post('login')
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
-  async login(
-    @Body() loginDto: LoginDto,
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ): Promise<LoginResponse> {
-    const result = await this.authService.login(
-      {
-        loginDto,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent'] || 'unknown',
-      },
-      response,
-    );
+async login(
+  @Body() loginDto: LoginDto,
+  @Req() request: Request,
+  @Res({ passthrough: true }) response: Response,
+): Promise<LoginResponse> {
+  const result = await this.authService.login({
+      loginDto,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] || 'unknown',
+    }, response);
 
-    if (result.sessionId) {
-      const csrfToken = await this.csrfService.generateToken(result.sessionId);
-      response.cookie('csrf_token', csrfToken, {
-        httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: '/',
-      });
-    }
+  this.logger.debug('Setting cookies...', {
+    sessionId: result.sessionId,
+    cookies: response.getHeaders()['set-cookie']
+  });
 
-    return result;
+  if (result.sessionId) {
+    // Set session cookie
+    response.cookie('session_id', result.sessionId, {
+      ...this.cookieOptions,
+      httpOnly: true,
+    });
+
+
+    // Set CSRF token
+    const csrfToken = await this.csrfService.generateToken(result.sessionId);
+    response.cookie('csrf_token', csrfToken, {
+      ...this.cookieOptions,
+      httpOnly: false,
+    });
   }
+
+  this.logger.debug('Cookies set, final headers:', {
+    cookies: response.getHeaders()['set-cookie']
+  });
+
+  return result;
+}
 
   @Post('sessions/cleanup')
   @UseGuards(JwtAuthGuard)
