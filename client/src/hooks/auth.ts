@@ -1,11 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import apiClient, { authApi, AuthResponse } from '@/lib/api-client';
+import { authApi, AuthResponse } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 import { RegisterInput } from '@/lib/validations/auth';
 import axios from 'axios';
 import React from 'react';
-import { LucideToggleLeft } from 'lucide-react';
-import { logger } from '@/utils/logger';
 
 const TIMEOUT_DURATION = 10000;
 
@@ -21,13 +19,17 @@ export function useLogin() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  return useMutation<AuthResponse, Error, { username: string; password: string }>({
+  return useMutation<
+    AuthResponse,
+    Error,
+    { username: string; password: string }
+  >({
     mutationFn: async (credentials) => {
       const result = await Promise.race<AuthResponse>([
         authApi.login(credentials),
         timeoutPromise(),
       ]);
-      
+
       // Store sessionId if provided
       if (result.sessionId) {
         localStorage.setItem('sessionId', result.sessionId);
@@ -46,7 +48,13 @@ export function useRegister() {
   const router = useRouter();
 
   return useMutation<any, Error, Omit<RegisterInput, 'confirmPassword'>>({
-    mutationFn: async (data: { email: string; username: string; password: string; firstName?: string; lastName?: string; }) => {
+    mutationFn: async (data: {
+      email: string;
+      username: string;
+      password: string;
+      firstName?: string;
+      lastName?: string;
+    }) => {
       const result = await Promise.race<any>([
         authApi.register(data),
         timeoutPromise(),
@@ -73,11 +81,14 @@ export function useLogout() {
 
       await authApi.logout();
       localStorage.removeItem('sessionId');
-      
+
       // Clear cookies by setting expired date
-      document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
-      document.cookie = 'refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
-      document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+      document.cookie =
+        'access_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+      document.cookie =
+        'refresh_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+      document.cookie =
+        'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
     },
     onSuccess: () => {
       queryClient.clear();
@@ -96,7 +107,7 @@ export function useVerifyEmail() {
         console.error('Verification failed:', error);
         throw error;
       }
-    }
+    },
   });
 }
 
@@ -128,7 +139,13 @@ export function useResetPassword() {
   const router = useRouter();
 
   return useMutation<any, Error, { token: string; password: string }>({
-    mutationFn: async ({ token, password }: { token: string; password: string }) => {
+    mutationFn: async ({
+      token,
+      password,
+    }: {
+      token: string;
+      password: string;
+    }) => {
       const result = await Promise.race<any>([
         authApi.resetPassword(token, password),
         timeoutPromise(),
@@ -142,6 +159,7 @@ export function useResetPassword() {
 }
 
 export function useUser() {
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   return useQuery({
@@ -154,8 +172,11 @@ export function useUser() {
         ]);
         return result.data;
       } catch (error) {
-        // If error is 401 (unauthorized), return null instead of throwing
         if (axios.isAxiosError(error) && error.response?.status === 401) {
+          localStorage.removeItem('sessionId');
+          if (!window.location.pathname.includes('/auth/login')) {
+            router.push('/auth/login');
+          }
           return null;
         }
         throw error;

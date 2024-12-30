@@ -64,7 +64,7 @@ import { forwardRef } from '@nestjs/common';
     TokenCleanupTask,
     CookieConfigService,
     CsrfService,
-    ErrorHandlingService
+    ErrorHandlingService,
   ],
   exports: [
     AuthService,

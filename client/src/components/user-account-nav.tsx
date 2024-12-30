@@ -46,7 +46,9 @@ export function UserAccountNav() {
     <div className="flex items-center gap-4">
       <div className="flex flex-col items-end">
         <p className="text-sm font-medium">
-          {user.firstName ? `${user.firstName} ${user.lastName}` : user.username}
+          {user.firstName
+            ? `${user.firstName} ${user.lastName}`
+            : user.username}
         </p>
         <p className="text-xs text-muted-foreground">{user.email}</p>
       </div>

@@ -6,7 +6,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../../session/services/session.service';
 import { RedisService } from '../../../redis/redis.service';
-import { MailerService } from '../../mail/mail.service';
+import { MailerService } from '../../mail/services/mail.service';
 import { PerformanceService } from 'src/common/monitoring/performance.service';
 import { addMinutes, subMinutes } from 'date-fns';
 import { LocationService } from '../services/location.service';

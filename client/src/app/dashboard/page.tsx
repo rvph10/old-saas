@@ -53,9 +53,7 @@ function StatCard({
     <Card>
       <CardContent className="flex items-center justify-between p-6">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">
-            {title}
-          </p>
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
           <div className="flex items-center gap-2">
             <p className="text-2xl font-bold">{value}</p>
             {trend && (

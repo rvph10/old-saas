@@ -13,6 +13,8 @@ import {
   HttpStatus,
   BadRequestException,
   Res,
+  LoggerService,
+  Logger,
 } from '@nestjs/common';
 import {
   AuthService,
@@ -34,7 +36,7 @@ import {
   Verify2FADto,
   VerifyEmailDto,
 } from '../dto';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { LoginResponse } from '../interfaces';
 import { CookieOptions, Request, Response } from 'express';
 
@@ -136,7 +138,6 @@ export class AuthController {
       response,
     );
 
-    // Generate CSRF token after successful login
     if (result.sessionId) {
       const csrfToken = await this.csrfService.generateToken(result.sessionId);
       response.cookie('csrf_token', csrfToken, {

@@ -27,6 +27,7 @@ import { MiddlewareModule } from '@modules/auth/middleware/middleware.module';
 import { HealthModule } from '@modules/health/health.module';
 import { ErrorHandlingService, ErrorModule } from '@core/errors';
 import { HealthController } from '@modules/health/health.controller';
+import { CsrfMiddleware } from '@core/middleware/csrf.middleware';
 
 @Module({
   imports: [
@@ -71,6 +72,19 @@ export class AppModule implements NestModule {
     // 2. Security middleware
     consumer.apply(RequestSanitizerMiddleware).forRoutes('*');
 
+    consumer
+      .apply(CsrfMiddleware)
+      .exclude(
+        { path: 'auth/password-reset/(.*)', method: RequestMethod.ALL },
+        { path: 'auth/register', method: RequestMethod.POST },
+        { path: 'auth/login', method: RequestMethod.POST },
+        { path: 'auth/verify-email', method: RequestMethod.POST },
+        { path: 'auth/verify', method: RequestMethod.POST },
+        { path: 'auth/resend-verification', method: RequestMethod.POST },
+        { path: 'auth/csrf-token', method: RequestMethod.GET },
+      )
+      .forRoutes('*');
+
     // 3. Refresh token middleware with proper exclusions
     consumer
       .apply(RefreshTokenMiddleware)
@@ -78,6 +92,7 @@ export class AppModule implements NestModule {
         { path: 'auth/register', method: RequestMethod.POST },
         { path: 'auth/login', method: RequestMethod.POST },
         { path: 'auth/password-reset/request', method: RequestMethod.POST },
+        { path: 'auth/password-reset/reset', method: RequestMethod.POST },
         { path: 'auth/verify-email', method: RequestMethod.POST },
       )
       .forRoutes('*');
@@ -92,6 +107,14 @@ export class AppModule implements NestModule {
       .forRoutes('*');
 
     // 5. Session middleware only for auth routes
-    consumer.apply(SessionMiddleware).forRoutes('auth/*');
+    consumer
+      .apply(SessionMiddleware)
+      .exclude(
+        { path: 'auth/password-reset/(.*)', method: RequestMethod.ALL },
+        { path: 'auth/register', method: RequestMethod.POST },
+        { path: 'auth/login', method: RequestMethod.POST },
+        { path: 'auth/verify-email', method: RequestMethod.POST },
+      )
+      .forRoutes('auth/*');
   }
 }

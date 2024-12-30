@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -18,48 +17,43 @@ import {
 import { Icons } from '../icons';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { useResendVerification } from '@/hooks/auth';
+import { useRequestPasswordReset } from '@/hooks/auth';
 
-const requestVerificationSchema = z.object({
+const requestResetSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
 });
 
-type RequestVerificationInput = z.infer<typeof requestVerificationSchema>;
+type RequestResetInput = z.infer<typeof requestResetSchema>;
 
-export function RequestVerificationForm() {
-  const router = useRouter();
+export function RequestPasswordResetForm() {
   const { toast } = useToast();
-  const resendVerification = useResendVerification();
+  const requestReset = useRequestPasswordReset();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
-  const form = useForm<RequestVerificationInput>({
-    resolver: zodResolver(requestVerificationSchema),
+  const form = useForm<RequestResetInput>({
+    resolver: zodResolver(requestResetSchema),
     defaultValues: {
       email: '',
     },
   });
 
-  async function onSubmit(data: RequestVerificationInput) {
+  async function onSubmit(data: RequestResetInput) {
     try {
       setIsLoading(true);
-      await resendVerification.mutateAsync(data.email);
+      await requestReset.mutateAsync(data.email);
+      setIsSuccess(true);
 
       toast({
-        title: 'Verification Email Sent',
-        description: 'Please check your email for the verification link.',
+        title: 'Check your email',
+        description:
+          'If an account exists for this email, you will receive password reset instructions.',
         variant: 'success',
       });
-
-      // Redirect to verification pending page
-      router.push('/auth/verify-email');
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.message ||
-        'Failed to send verification email. Please try again.';
-
       toast({
         title: 'Error',
-        description: errorMessage,
+        description: error.message || 'Something went wrong. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -67,14 +61,35 @@ export function RequestVerificationForm() {
     }
   }
 
+  if (isSuccess) {
+    return (
+      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+        <div className="flex flex-col space-y-2 text-center">
+          <Icons.mail className="mx-auto h-12 w-12 text-primary" />
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Check your email
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            If an account exists for this email, you will receive password reset
+            instructions.
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/auth/login">Back to Login</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
       <div className="flex flex-col space-y-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Resend Verification Email
+          Reset Password
         </h1>
         <p className="text-sm text-muted-foreground">
-          Enter your email address to receive a new verification link
+          Enter your email address and we'll send you a link to reset your
+          password
         </p>
       </div>
 
@@ -103,16 +118,17 @@ export function RequestVerificationForm() {
             {isLoading && (
               <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
             )}
-            {isLoading ? 'Sending...' : 'Send Verification Email'}
+            {isLoading ? 'Sending...' : 'Send Reset Link'}
           </Button>
         </form>
       </Form>
 
-      <div className="text-center text-sm">
+      <p className="text-center text-sm text-muted-foreground">
+        Remember your password?{' '}
         <Link href="/auth/login" className="text-primary hover:underline">
-          Back to Login
+          Sign in
         </Link>
-      </div>
+      </p>
     </div>
   );
 }

@@ -1,7 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../core/database/prisma.service';
 import * as geoip from 'geoip-lite';
-import { AppError, ErrorCodes, ErrorHandlingService, ValidationError } from '@core/errors';
+import {
+  AppError,
+  ErrorCodes,
+  ErrorHandlingService,
+  ValidationError,
+} from '@core/errors';
 
 @Injectable()
 export class LocationService {

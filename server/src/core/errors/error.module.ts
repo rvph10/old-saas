@@ -6,11 +6,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 @Global()
 @Module({
   imports: [ConfigModule],
-  providers: [
-    ErrorHandlingService,
-    MetricsService,
-    ConfigService,
-  ],
+  providers: [ErrorHandlingService, MetricsService, ConfigService],
   exports: [ErrorHandlingService, MetricsService],
 })
 export class ErrorModule {}

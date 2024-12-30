@@ -18,7 +18,9 @@ export function Header({ children }: HeaderProps) {
           {/* Left side with mobile menu button if provided */}
           <div className="flex items-center">
             {children}
-            <span className="ml-2 text-xl font-bold text-gray-900">Nibblix</span>
+            <span className="ml-2 text-xl font-bold text-gray-900">
+              Nibblix
+            </span>
           </div>
 
           {/* Right side with user account navigation */}

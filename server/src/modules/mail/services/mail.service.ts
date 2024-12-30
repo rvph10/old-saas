@@ -134,7 +134,7 @@ export class MailerService {
 
   // Helper method for password reset emails
   async sendPasswordReset(email: string, token: string): Promise<boolean> {
-    const resetLink = `${this.configService.get('FRONTEND_URL')}/reset-password?token=${token}`;
+    const resetLink = `${this.configService.get('FRONTEND_URL')}/auth/forgot-password/${token}`;
 
     return this.sendMail({
       to: email,

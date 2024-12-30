@@ -56,8 +56,8 @@ export default function HomePage() {
               <span className="text-primary">with Confidence</span>
             </h1>
             <p className="mx-auto mb-12 max-w-2xl text-lg text-muted-foreground">
-              Everything you need to run your restaurant efficiently - from order
-              management to staff scheduling, all in one place.
+              Everything you need to run your restaurant efficiently - from
+              order management to staff scheduling, all in one place.
             </p>
             <div className="flex justify-center gap-4">
               <Button size="lg" asChild>
@@ -89,9 +89,7 @@ export default function HomePage() {
                   <h3 className="mb-2 text-xl font-semibold">
                     {feature.title}
                   </h3>
-                  <p className="text-muted-foreground">
-                    {feature.description}
-                  </p>
+                  <p className="text-muted-foreground">{feature.description}</p>
                 </div>
               ))}
             </div>
@@ -101,7 +99,9 @@ export default function HomePage() {
         {/* Footer */}
         <footer className="border-t py-12">
           <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-            <p>&copy; {new Date().getFullYear()} Nibblix. All rights reserved.</p>
+            <p>
+              &copy; {new Date().getFullYear()} Nibblix. All rights reserved.
+            </p>
           </div>
         </footer>
       </div>

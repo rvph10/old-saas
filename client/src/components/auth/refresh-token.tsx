@@ -6,13 +6,13 @@ import { authApi } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 
 const publicPaths = [
-  '/', 
-  '/auth/login', 
-  '/auth/register', 
+  '/',
+  '/auth/login',
+  '/auth/register',
   '/auth/verify-email',
   '/auth/verify',
   '/auth/verify-email/request',
-  '/auth/refresh'
+  '/auth/refresh',
 ];
 
 export function RefreshTokenHandler() {
@@ -24,7 +24,7 @@ export function RefreshTokenHandler() {
     if (publicPaths.includes(pathname)) return;
     const hasRefreshToken = document.cookie.includes('refresh_token=');
     if (!hasRefreshToken) return;
-    
+
     try {
       await authApi.refreshToken();
     } catch (error) {

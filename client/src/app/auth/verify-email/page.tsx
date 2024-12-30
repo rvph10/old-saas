@@ -32,25 +32,19 @@ export default function VerifyEmailPage() {
               Verify Your Email
             </h1>
             <p className="text-muted-foreground">
-              We've sent a verification link to your email address. 
-              Please check your inbox (and spam folder) to confirm your account.
+              We've sent a verification link to your email address. Please check
+              your inbox (and spam folder) to confirm your account.
             </p>
           </div>
 
           <div className="flex flex-col space-y-4">
             <Button asChild>
-              <Link href="/auth/login">
-                Go to Login
-              </Link>
+              <Link href="/auth/login">Go to Login</Link>
             </Button>
 
             <p className="text-sm text-muted-foreground">
-              Didn't receive an email? 
-              <Button 
-                variant="link" 
-                className="p-0 pl-1"
-                asChild
-              >
+              Didn't receive an email?
+              <Button variant="link" className="p-0 pl-1" asChild>
                 <Link href="/auth/verify-email/request">
                   Resend Verification
                 </Link>

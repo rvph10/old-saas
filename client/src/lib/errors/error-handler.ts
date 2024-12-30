@@ -4,7 +4,8 @@ import { ApiError, ApiErrorResponse } from './api-errors';
 
 export class ErrorHandler {
   private static readonly ERROR_MESSAGES = {
-    NETWORK_ERROR: 'Unable to connect to the server. Please check your internet connection.',
+    NETWORK_ERROR:
+      'Unable to connect to the server. Please check your internet connection.',
     TIMEOUT_ERROR: 'The request timed out. Please try again.',
     SERVER_ERROR: 'An unexpected error occurred. Please try again later.',
     UNAUTHORIZED: 'Your session has expired. Please log in again.',

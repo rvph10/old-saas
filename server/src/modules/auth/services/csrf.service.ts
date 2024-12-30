@@ -2,7 +2,6 @@ import { RedisService } from '@infrastructure/cache/redis.service';
 import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 
-
 @Injectable()
 export class CsrfService {
   private readonly TOKEN_LENGTH = 32;

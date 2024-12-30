@@ -1,7 +1,14 @@
-import { IsEmail, IsString, MinLength, Matches } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  Matches,
+  IsNotEmpty,
+} from 'class-validator';
 
 export class RequestResetDto {
   @IsEmail()
+  @IsNotEmpty()
   email: string;
 }
 

@@ -1,4 +1,8 @@
-import axios, { AxiosHeaders, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosHeaders,
+  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
+} from 'axios';
 import { ErrorHandler } from './errors/error-handler';
 
 export interface AuthResponse {
@@ -34,7 +38,7 @@ const apiClient = axios.create({
 const clearAuthState = () => {
   localStorage.removeItem('sessionId');
   const cookies = ['access_token', 'refresh_token', 'csrf_token'];
-  cookies.forEach(cookie => {
+  cookies.forEach((cookie) => {
     document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
   });
 };
@@ -50,11 +54,11 @@ apiClient.interceptors.request.use(
     // Set default headers
     config.headers.set('Content-Type', 'application/json');
     config.headers.set('Access-Control-Allow-Credentials', 'true');
-    
+
     // Get CSRF token from cookie
     const csrfToken = document.cookie
       .split('; ')
-      .find(row => row.startsWith('csrf_token='))
+      .find((row) => row.startsWith('csrf_token='))
       ?.split('=')[1];
 
     if (csrfToken) {
@@ -72,7 +76,7 @@ apiClient.interceptors.request.use(
         url: config.url,
         method: config.method,
         headers: config.headers,
-        data: config.data
+        data: config.data,
       });
     }
 
@@ -81,7 +85,7 @@ apiClient.interceptors.request.use(
   (error) => {
     console.error('Request Error:', error);
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor
@@ -92,21 +96,21 @@ apiClient.interceptors.response.use(
         status: response.status,
         statusText: response.statusText,
         data: response.data,
-        headers: response.headers
+        headers: response.headers,
       });
     }
     return response;
   },
   async (error) => {
     const errorResponse = ErrorHandler.handleError(error);
-    
+
     // Show toast for user-facing errors
     if (error.config?.showError !== false) {
       ErrorHandler.showErrorToast(errorResponse);
     }
 
     return Promise.reject(errorResponse);
-  }
+  },
 );
 
 // Auth API
@@ -116,8 +120,11 @@ export const authApi = {
     password: string;
   }): Promise<AuthResponse> => {
     try {
-      const response = await apiClient.post<AuthResponse>('/auth/login', credentials);
-      
+      const response = await apiClient.post<AuthResponse>(
+        '/auth/login',
+        credentials,
+      );
+
       if (response.data.sessionId) {
         localStorage.setItem('sessionId', response.data.sessionId);
       }
@@ -158,9 +165,9 @@ export const authApi = {
     try {
       const response = await apiClient.post<AuthResponse>('/auth/refresh', {}, {
         headers: {
-          'x-skip-csrf': 'true'
+          'x-skip-csrf': 'true',
         },
-        showError: false
+        showError: false,
       } as CustomRequestConfig);
       return response.data;
     } catch (error) {
@@ -181,36 +188,37 @@ export const authApi = {
     }
   },
 
-  resendVerification: async (email: string) => 
+  resendVerification: async (email: string) =>
     apiClient.post('/auth/resend-verification', { email }),
 
-  getCurrentUser: async () => 
-    apiClient.get('/auth/me'),
+  getCurrentUser: async () => apiClient.get('/auth/me'),
 
-  requestPasswordReset: async (email: string) => 
+  requestPasswordReset: async (email: string) =>
     apiClient.post('/auth/password-reset/request', { email }),
 
-  resetPassword: async (token: string, password: string) => 
-    apiClient.post('/auth/password-reset/reset', { token, password }),
+  resetPassword: async (token: string, password: string, headers: any = {}) =>
+    apiClient.post(
+      '/auth/password-reset/reset',
+      { token, password },
+      { headers },
+    ),
 
-  terminateSession: async (sessionId: string) => 
+  terminateSession: async (sessionId: string) =>
     apiClient.delete(`/auth/sessions/${sessionId}`),
 
-  logoutAllDevices: async (keepCurrentSession: boolean = false) => 
-    apiClient.post('/auth/logout-all', { 
-      keepCurrentSession 
+  logoutAllDevices: async (keepCurrentSession: boolean = false) =>
+    apiClient.post('/auth/logout-all', {
+      keepCurrentSession,
     }),
-    getSessions: async () => 
-      apiClient.get('/auth/sessions'),
-      
-    blockAccount: async (accountId: string) => 
-      apiClient.post('/auth/block', { accountId }),
-  
-    extend2FASession: async (token: string) => 
-      apiClient.post('/auth/2fa/verify', { token }),
-  
-    getCsrfToken: async () => 
-      apiClient.get('/auth/csrf-token'),
+  getSessions: async () => apiClient.get('/auth/sessions'),
+
+  blockAccount: async (accountId: string) =>
+    apiClient.post('/auth/block', { accountId }),
+
+  extend2FASession: async (token: string) =>
+    apiClient.post('/auth/2fa/verify', { token }),
+
+  getCsrfToken: async () => apiClient.get('/auth/csrf-token'),
 };
 
 export default apiClient;

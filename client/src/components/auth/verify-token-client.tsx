@@ -16,7 +16,9 @@ const VerifyTokenClient = ({ token }: VerifyTokenClientProps) => {
   const router = useRouter();
   const { toast } = useToast();
   const verifyEmail = useVerifyEmail();
-  const [verificationState, setVerificationState] = useState<'loading' | 'success' | 'error'>('loading');
+  const [verificationState, setVerificationState] = useState<
+    'loading' | 'success' | 'error'
+  >('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -31,10 +33,15 @@ const VerifyTokenClient = ({ token }: VerifyTokenClientProps) => {
         });
       } catch (error: any) {
         setVerificationState('error');
-        setErrorMessage(error.response?.data?.message || 'Verification failed. Please try again.');
+        setErrorMessage(
+          error.response?.data?.message ||
+            'Verification failed. Please try again.',
+        );
         toast({
           title: 'Verification Failed',
-          description: error.response?.data?.message || 'Verification failed. Please try again.',
+          description:
+            error.response?.data?.message ||
+            'Verification failed. Please try again.',
           variant: 'destructive',
         });
       }
@@ -45,7 +52,7 @@ const VerifyTokenClient = ({ token }: VerifyTokenClientProps) => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <motion.div 
+      <motion.div
         className="w-full max-w-md rounded-lg border bg-card p-8 text-center shadow-lg"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -59,7 +66,9 @@ const VerifyTokenClient = ({ token }: VerifyTokenClientProps) => {
           >
             <Icons.spinner className="h-12 w-12 animate-spin text-primary" />
             <h2 className="text-xl font-semibold">Verifying Email</h2>
-            <p className="text-muted-foreground">Please wait while we verify your email address...</p>
+            <p className="text-muted-foreground">
+              Please wait while we verify your email address...
+            </p>
           </motion.div>
         )}
 
@@ -72,20 +81,19 @@ const VerifyTokenClient = ({ token }: VerifyTokenClientProps) => {
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
             >
               <Icons.check className="h-12 w-12 text-green-500" />
             </motion.div>
             <div className="space-y-2">
               <h2 className="text-2xl font-bold">Email Verified!</h2>
               <p className="text-muted-foreground">
-                Thank you for verifying your email address. You can now login to your account.
+                Thank you for verifying your email address. You can now login to
+                your account.
               </p>
             </div>
             <Button asChild className="w-full">
-              <Link href="/auth/login">
-                Go to Login
-              </Link>
+              <Link href="/auth/login">Go to Login</Link>
             </Button>
           </motion.div>
         )}
@@ -99,7 +107,7 @@ const VerifyTokenClient = ({ token }: VerifyTokenClientProps) => {
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
             >
               <Icons.x className="h-12 w-12 text-red-500" />
             </motion.div>
@@ -114,9 +122,7 @@ const VerifyTokenClient = ({ token }: VerifyTokenClientProps) => {
                 </Link>
               </Button>
               <Button asChild>
-                <Link href="/auth/login">
-                  Back to Login
-                </Link>
+                <Link href="/auth/login">Back to Login</Link>
               </Button>
             </div>
           </motion.div>

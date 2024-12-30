@@ -14,12 +14,9 @@ import { ErrorModule } from '@core/errors';
     RedisModule,
     MonitoringModule,
     DeviceModule,
-    ErrorModule
+    ErrorModule,
   ],
-  providers: [
-    SessionService,
-    SessionCleanupService,
-  ],
+  providers: [SessionService, SessionCleanupService],
   controllers: [SessionController],
   exports: [SessionService, SessionCleanupService],
 })

@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import fetch from 'node-fetch';
-import { AppError, ErrorCodes, ErrorHandlingService, ValidationError } from '@core/errors';
+import {
+  AppError,
+  ErrorCodes,
+  ErrorHandlingService,
+  ValidationError,
+} from '@core/errors';
 
 @Injectable()
 export class PasswordService {

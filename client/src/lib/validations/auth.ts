@@ -6,8 +6,8 @@ export const loginSchema = z.object({
     .min(3, 'Username must be at least 3 characters')
     .max(50, 'Username must not exceed 50 characters')
     .regex(
-      /^[a-zA-Z0-9_-]+$/,
-      'Username can only contain letters, numbers, underscores and hyphens',
+      /^[a-zA-Z0-9_.-]+$/,
+      'Username can only contain letters, numbers, underscores, periods and hyphens',
     ),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });

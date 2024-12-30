@@ -2,60 +2,19 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import * as expressSession from 'express-session';
-import { Store } from 'express-session';
 import * as cookieParser from 'cookie-parser';
-import { RedisService } from '@infrastructure/cache/redis.service';
 import { CustomLoggerService } from '@infrastructure/logger/logger.service';
 import { MetricsService } from '@infrastructure/monitoring/metrics.service';
 import { GlobalExceptionFilter } from '@core/filters/global-exception.filter';
-
-// Create a custom session store that uses our RedisService
-class CustomRedisStore extends Store {
-  constructor(private redisService: RedisService) {
-    super();
-  }
-
-  async get(sid: string, callback: (err: any, session?: any) => void) {
-    try {
-      const data = await this.redisService.get(`session:${sid}`);
-      callback(null, data ? JSON.parse(data) : null);
-    } catch (err) {
-      callback(err);
-    }
-  }
-
-  async set(sid: string, session: any, callback?: (err?: any) => void) {
-    try {
-      // Convert max age to seconds for Redis TTL
-      const ttl = session.cookie.maxAge
-        ? Math.floor(session.cookie.maxAge / 1000)
-        : 86400;
-      await this.redisService.set(
-        `session:${sid}`,
-        JSON.stringify(session),
-        ttl,
-      );
-      callback?.();
-    } catch (err) {
-      callback?.(err);
-    }
-  }
-
-  async destroy(sid: string, callback?: (err?: any) => void) {
-    try {
-      await this.redisService.del(`session:${sid}`);
-      callback?.();
-    } catch (err) {
-      callback?.(err);
-    }
-  }
-}
+import { RedisStore } from 'connect-redis';
+import { createClient } from 'redis';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
     logger: new CustomLoggerService(),
   });
+
   app.enableCors({
     origin: 'http://192.168.129.100:3000',
     credentials: true,
@@ -84,56 +43,41 @@ async function bootstrap() {
   app.use(cookieParser(process.env.COOKIE_SECRET));
 
   const metricsService = app.get(MetricsService);
-  const redisService = app.get(RedisService);
+  const redisClient = createClient({
+    url: process.env.REDIS_URL || 'redis://redis:6379',
+    legacyMode: false,
+  });
 
-  app.use(
-    (
-      req: { method: string },
-      res: {
-        header: (arg0: string, arg1: string) => void;
-        status: (arg0: number) => {
-          (): any;
-          new (): any;
-          json: { (arg0: {}): any; new (): any };
-        };
-      },
-      next: () => any,
-    ) => {
-      if (req.method === 'OPTIONS') {
-        res.header(
-          'Access-Control-Allow-Methods',
-          'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-        );
-        res.header(
-          'Access-Control-Allow-Headers',
-          'Origin, X-Requested-With, Content-Type, Accept, Authorization, session-id',
-        );
-        res.header('Access-Control-Allow-Credentials', 'true');
-        return res.status(200).json({});
-      }
-      return next();
-    },
-  );
+  await redisClient.connect().catch((err) => {
+    logger.error('Redis connection error:', err);
+    throw err;
+  });
 
-  app.useGlobalFilters(new GlobalExceptionFilter(metricsService));
-  app.useLogger(new CustomLoggerService());
-
-  // Use our custom Redis store
   app.use(
     expressSession({
-      // Changed this line
-      store: new CustomRedisStore(redisService),
+      store: new RedisStore({
+        client: redisClient,
+        prefix: 'session:',
+        ttl: 86400,
+        disableTouch: false,
+      }),
       secret: process.env.COOKIE_SECRET || 'your-secret-key',
-      resave: false,
-      saveUninitialized: false,
+      resave: true,
+      saveUninitialized: true,
+      rolling: true,
+      name: 'sid',
       cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
         sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        domain: process.env.COOKIE_DOMAIN || undefined,
       },
     }),
   );
+
+  app.useGlobalFilters(new GlobalExceptionFilter(metricsService));
+  app.useLogger(new CustomLoggerService());
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -151,5 +95,6 @@ async function bootstrap() {
   const host = process.env.HOST || '0.0.0.0';
   await app.listen(port, host);
   logger.log(`Application is running on: http://${host}:${port}`);
+  redisClient.on('error', (err) => logger.error('Redis Client Error:', err));
 }
 bootstrap();

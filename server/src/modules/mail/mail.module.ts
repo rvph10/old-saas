@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { MailerService } from './mail.service';
+import { MailerService } from './services/mail.service';
 import { RedisModule } from 'src/redis/redis.module';
 
 @Module({

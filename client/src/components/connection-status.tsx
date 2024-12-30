@@ -20,7 +20,9 @@ export function ConnectionStatus() {
     // Check server availability
     const checkServer = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`);
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/health`,
+        );
         setIsServerAvailable(response.ok);
       } catch {
         setIsServerAvailable(false);
@@ -39,18 +41,21 @@ export function ConnectionStatus() {
 
   if (!isOnline || !isServerAvailable) {
     return (
-      <Alert variant="destructive" className="fixed bottom-4 right-4 w-auto max-w-md">
+      <Alert
+        variant="destructive"
+        className="fixed bottom-4 right-4 w-auto max-w-md"
+      >
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
           {!isOnline ? (
             'You are offline. Please check your internet connection.'
           ) : (
             <>
-              Unable to connect to server. 
-              <Button 
-                variant="link" 
+              Unable to connect to server.
+              <Button
+                variant="link"
                 onClick={() => window.location.reload()}
-                className="px-2 h-auto"
+                className="h-auto px-2"
               >
                 Retry
               </Button>

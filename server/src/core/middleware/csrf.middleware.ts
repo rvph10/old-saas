@@ -12,33 +12,54 @@ export class CsrfMiddleware implements NestMiddleware {
     '/auth/verify',
     '/auth/resend-verification',
     '/auth/password-reset/request',
+    '/auth/password-reset/reset',
     '/auth/refresh',
     '/auth/csrf-token',
-    '/health'
+    '/health',
   ]);
-
-  private skipSessionCheck(path: string): boolean {
-    return this.PUBLIC_ROUTES.has(path.split('?')[0]); // Handle paths with query params
-  }
 
   constructor(private readonly csrfService: CsrfService) {}
 
-  async use(req: Request, res: Response, next: NextFunction) {
-    const path = req.path.split('?')[0]; // Remove query parameters
+  private getActualPath(req: Request): string {
+    // Get the path from the '0' parameter if it exists, otherwise use req.path
+    const paramPath = req.params?.[0];
+    if (paramPath) {
+      return `/${paramPath}`;
+    }
+    return req.path;
+  }
 
-    // Skip CSRF check for safe methods and public routes
-    if (
-      this.SAFE_METHODS.includes(req.method) ||
-      this.PUBLIC_ROUTES.has(path)
-    ) {
-      return next();
+  private isPublicPath(path: string): boolean {
+    if (this.PUBLIC_ROUTES.has(path)) {
+      return true;
     }
 
-    const csrfToken = req.headers['x-csrf-token'] as string;
-    const sessionId = req.headers['session-id'] as string;
+    // For cases where path starts with 'auth/'
+    const authPath = path.startsWith('/') ? path : `/auth/${path}`;
+    return this.PUBLIC_ROUTES.has(authPath);
+  }
 
-    // For protected routes that require a session
-    if (!this.skipSessionCheck(path)) {
+  async use(req: Request, res: Response, next: NextFunction) {
+    try {
+      const actualPath = this.getActualPath(req);
+      console.log('Actual Path:', actualPath);
+      console.log('Method:', req.method);
+
+      // Skip CSRF check for safe methods
+      if (this.SAFE_METHODS.includes(req.method)) {
+        return next();
+      }
+
+      // Check if it's a public route
+      if (this.isPublicPath(actualPath)) {
+        console.log('Public route detected:', actualPath);
+        return next();
+      }
+
+      const csrfToken = req.headers['x-csrf-token'] as string;
+      const sessionId = req.headers['session-id'] as string;
+
+      // For protected routes, require session and CSRF token
       if (!sessionId) {
         throw new ForbiddenException('No session ID provided');
       }
@@ -51,7 +72,6 @@ export class CsrfMiddleware implements NestMiddleware {
         sessionId,
         csrfToken,
       );
-
       if (!isValid) {
         throw new ForbiddenException('Invalid CSRF token');
       }
@@ -64,8 +84,10 @@ export class CsrfMiddleware implements NestMiddleware {
         sameSite: 'strict',
         path: '/',
       });
-    }
 
-    next();
+      next();
+    } catch (error) {
+      next(error);
+    }
   }
 }

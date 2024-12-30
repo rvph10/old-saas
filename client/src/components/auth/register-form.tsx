@@ -45,16 +45,15 @@ export function RegisterForm() {
       await register.mutateAsync(registerData);
       toast({
         title: 'Registration Successful',
-        description: "Please check your email to verify your account.",
+        description: 'Please check your email to verify your account.',
         variant: 'success',
         duration: 3000,
       });
-
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message ||
         'Failed to register. Please try again.';
-  
+
       toast({
         title: 'Registration Failed',
         description: errorMessage,

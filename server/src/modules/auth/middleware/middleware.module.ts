@@ -11,7 +11,6 @@ import { ConfigModule } from '@nestjs/config';
 import { MetricsService } from '@infrastructure/monitoring/metrics.service';
 import { SessionModule } from '@modules/session/session.module';
 
-
 @Module({
   imports: [
     RedisModule,
@@ -19,7 +18,7 @@ import { SessionModule } from '@modules/session/session.module';
     ErrorModule,
     MonitoringModule,
     ConfigModule,
-    SessionModule
+    SessionModule,
   ],
   providers: [
     SessionMiddleware,
@@ -27,12 +26,8 @@ import { SessionModule } from '@modules/session/session.module';
     RequestLoggerMiddleware,
     SessionService,
     ErrorHandlingService,
-    MetricsService
+    MetricsService,
   ],
-  exports: [
-    SessionMiddleware,
-    RateLimitMiddleware,
-    RequestLoggerMiddleware
-  ],
+  exports: [SessionMiddleware, RateLimitMiddleware, RequestLoggerMiddleware],
 })
 export class MiddlewareModule {}

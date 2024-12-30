@@ -5,11 +5,7 @@ import { ErrorModule } from '@core/errors';
 import { MonitoringModule } from '@infrastructure/monitoring/monitoring.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    ErrorModule,
-    MonitoringModule
-  ],
+  imports: [PrismaModule, ErrorModule, MonitoringModule],
   providers: [DeviceService],
   exports: [DeviceService],
 })

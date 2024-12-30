@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../../core/database/prisma.service';
@@ -7,7 +12,7 @@ import { RegisterDto } from '../dto/register.dto';
 import * as bcrypt from 'bcryptjs';
 import { SessionService } from '../../session/services/session.service';
 import { ResetPasswordDto } from '../dto/password-reset.dto';
-import { MailerService } from '../../mail/mail.service';
+import { MailerService } from '../../mail/services/mail.service';
 import { v4 as uuidv4 } from 'uuid';
 import { PasswordService } from './password.service';
 import { addMinutes, differenceInMinutes } from 'date-fns';
@@ -758,13 +763,17 @@ export class AuthService {
           }
 
           const token = crypto.randomBytes(32).toString('hex');
-          await this.redisService.set(`pwd_reset:${token}`, user.id, 60 * 15);
+          await this.redisService.set(
+            `pwd_reset:${token}`,
+            user.id,
+            60 * 15, // 15 minutes
+          );
 
           await this.mailerService.sendPasswordReset(email, token);
 
           return { message: 'If the email exists, a reset link has been sent' };
         } catch (error) {
-          this.logger.error('Request Password Reset error', error.stack);
+          this.logger.error('Request Password Reset error:', error);
           throw error;
         }
       },

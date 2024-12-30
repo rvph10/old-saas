@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import apiClient from '@/lib/api-client';
 
 export function TestConnection() {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>(
+    'loading',
+  );
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -24,14 +26,12 @@ export function TestConnection() {
   }, []);
 
   return (
-    <div className="p-4 border rounded">
-      <h2 className="text-lg font-bold mb-2">Connection Test</h2>
+    <div className="rounded border p-4">
+      <h2 className="mb-2 text-lg font-bold">Connection Test</h2>
       <div>
         Status: {status}
         {message && (
-          <pre className="mt-2 p-2 bg-gray-100 rounded">
-            {message}
-          </pre>
+          <pre className="mt-2 rounded bg-gray-100 p-2">{message}</pre>
         )}
       </div>
     </div>

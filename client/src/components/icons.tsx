@@ -4,5 +4,5 @@ export const Icons = {
   spinner: Loader2,
   mail: Mail,
   check: Check,
-  x: X
+  x: X,
 };

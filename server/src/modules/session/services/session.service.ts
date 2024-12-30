@@ -9,7 +9,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { DeviceService } from '../../auth/services/device.service';
 import { PerformanceService } from '@infrastructure/monitoring/performance.service';
 import { CookieOptions, Response } from 'express';
-import { AppError, ErrorCodes, ErrorHandlingService, SessionError } from '@core/errors';
+import {
+  AppError,
+  ErrorCodes,
+  ErrorHandlingService,
+  SessionError,
+} from '@core/errors';
 
 interface SessionOptions {
   maxSessions?: number;

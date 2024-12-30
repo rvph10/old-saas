@@ -1,29 +1,23 @@
-import { FakeAccountGenerator } from "./src/lib/fake-account-generator.js";
+import { FakeAccountGenerator } from './src/lib/fake-account-generator.js';
 
-async function main() {
-  const generator = new FakeAccountGenerator();
-  
-  // Get number of accounts to generate from command line
-  const numAccounts = process.argv[2] ? parseInt(process.argv[2], 10) : 1;
-  
+async function main(count = 10) {
   try {
-    const accounts = [];
-    for (let i = 0; i < numAccounts; i++) {
+    const generator = new FakeAccountGenerator();
+
+    console.log(`Generating ${count} fake accounts...`);
+
+    for (let i = 0; i < count; i++) {
       const account = generator.generateFakeAccount();
       generator.saveAccount(account);
-      accounts.push(account);
+      console.log(`Generated account ${i + 1}/${count}: ${account.email}`);
     }
-    
-    console.log(`Successfully generated ${accounts.length} accounts:`);
-    accounts.forEach((account, index) => {
-      console.log(`\nAccount ${index + 1}:`);
-      console.log(`Email: ${account.email}`);
-      console.log(`Username: ${account.username}`);
-      console.log(`Password: ${account.password}`);
-    });
+
+    console.log('\nGenerated accounts successfully!');
   } catch (error) {
     console.error('Error generating accounts:', error);
   }
 }
 
-main().catch(console.error);
+// Get count from command line arguments
+const count = parseInt(process.argv[2]) || 10;
+main(count);
