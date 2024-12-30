@@ -35,13 +35,8 @@ const apiClient = axios.create({
 });
 
 const clearAuthState = () => {
-  const cookies = [
-    'session_id',
-    'access_token', 
-    'refresh_token', 
-    'csrf_token'
-  ];
-  
+  const cookies = ['session_id', 'access_token', 'refresh_token', 'csrf_token'];
+
   cookies.forEach((cookieName) => {
     document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure; samesite=strict`;
   });
@@ -60,19 +55,19 @@ apiClient.interceptors.request.use(
 
     const sessionId = document.cookie
       .split('; ')
-      .find(row => row.startsWith('session_id='))
+      .find((row) => row.startsWith('session_id='))
       ?.split('=')[1];
 
-      if (sessionId) {
-        config.headers.set('session-id', sessionId);
-      } else {
-        console.debug('No session ID found in cookies:', document.cookie);
-      }
+    if (sessionId) {
+      config.headers.set('session-id', sessionId);
+    } else {
+      console.debug('No session ID found in cookies:', document.cookie);
+    }
 
     // Get CSRF token from cookie
     const csrfToken = document.cookie
       .split('; ')
-      .find(row => row.startsWith('csrf_token='))
+      .find((row) => row.startsWith('csrf_token='))
       ?.split('=')[1];
 
     if (csrfToken) {
@@ -83,7 +78,7 @@ apiClient.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor

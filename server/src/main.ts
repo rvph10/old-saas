@@ -52,7 +52,7 @@ async function bootstrap() {
   const metricsService = app.get(MetricsService);
   const redisClient = createClient({
     url: process.env.REDIS_URL || 'redis://redis:6379',
-    legacyMode: false
+    legacyMode: false,
   });
 
   await redisClient.connect().catch((err) => {

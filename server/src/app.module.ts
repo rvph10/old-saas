@@ -73,9 +73,7 @@ export class AppModule implements NestModule {
     // 2. Security middleware
     consumer.apply(RequestSanitizerMiddleware).forRoutes('*');
 
-    consumer
-      .apply(ErrorHandlingMiddleware)
-      .forRoutes('*');
+    consumer.apply(ErrorHandlingMiddleware).forRoutes('*');
 
     consumer
       .apply(CsrfMiddleware)

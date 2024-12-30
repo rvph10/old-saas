@@ -1,6 +1,10 @@
-import { SessionService } from "@modules/session/services";
-import { ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
-import { AuthGuard } from "@nestjs/passport";
+import { SessionService } from '@modules/session/services';
+import {
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -11,10 +15,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     try {
       const request = context.switchToHttp().getRequest();
-      
+
       // Check both headers and cookies for session ID
-      const sessionId = request.headers['session-id'] || request.cookies['session_id'];
-      
+      const sessionId =
+        request.headers['session-id'] || request.cookies['session_id'];
+
       if (!sessionId) {
         throw new UnauthorizedException('No session ID provided');
       }

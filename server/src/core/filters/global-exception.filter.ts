@@ -35,9 +35,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           code: 'INTERNAL_ERROR',
           message: 'Internal server error',
           timestamp: new Date().toISOString(),
-          details: process.env.NODE_ENV === 'development' 
-            ? { error: exception instanceof Error ? exception.message : 'Unknown error' }
-            : undefined
+          details:
+            process.env.NODE_ENV === 'development'
+              ? {
+                  error:
+                    exception instanceof Error
+                      ? exception.message
+                      : 'Unknown error',
+                }
+              : undefined,
         };
       }
 
@@ -56,7 +62,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       response.status(500).json({
         code: 'INTERNAL_ERROR',
         message: 'Internal server error',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
   }

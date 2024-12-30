@@ -124,44 +124,46 @@ export class AuthController {
   }
 
   @Post('login')
-async login(
-  @Body() loginDto: LoginDto,
-  @Req() request: Request,
-  @Res({ passthrough: true }) response: Response,
-): Promise<LoginResponse> {
-  const result = await this.authService.login({
-      loginDto,
-      ipAddress: request.ip,
-      userAgent: request.headers['user-agent'] || 'unknown',
-    }, response);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<LoginResponse> {
+    const result = await this.authService.login(
+      {
+        loginDto,
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'] || 'unknown',
+      },
+      response,
+    );
 
-  this.logger.debug('Setting cookies...', {
-    sessionId: result.sessionId,
-    cookies: response.getHeaders()['set-cookie']
-  });
-
-  if (result.sessionId) {
-    // Set session cookie
-    response.cookie('session_id', result.sessionId, {
-      ...this.cookieOptions,
-      httpOnly: true,
+    this.logger.debug('Setting cookies...', {
+      sessionId: result.sessionId,
+      cookies: response.getHeaders()['set-cookie'],
     });
 
+    if (result.sessionId) {
+      // Set session cookie
+      response.cookie('session_id', result.sessionId, {
+        ...this.cookieOptions,
+        httpOnly: true,
+      });
 
-    // Set CSRF token
-    const csrfToken = await this.csrfService.generateToken(result.sessionId);
-    response.cookie('csrf_token', csrfToken, {
-      ...this.cookieOptions,
-      httpOnly: false,
+      // Set CSRF token
+      const csrfToken = await this.csrfService.generateToken(result.sessionId);
+      response.cookie('csrf_token', csrfToken, {
+        ...this.cookieOptions,
+        httpOnly: false,
+      });
+    }
+
+    this.logger.debug('Cookies set, final headers:', {
+      cookies: response.getHeaders()['set-cookie'],
     });
+
+    return result;
   }
-
-  this.logger.debug('Cookies set, final headers:', {
-    cookies: response.getHeaders()['set-cookie']
-  });
-
-  return result;
-}
 
   @Post('sessions/cleanup')
   @UseGuards(JwtAuthGuard)

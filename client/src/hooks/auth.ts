@@ -19,7 +19,11 @@ export function useLogin() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  return useMutation<AuthResponse, Error, { username: string; password: string }>({
+  return useMutation<
+    AuthResponse,
+    Error,
+    { username: string; password: string }
+  >({
     mutationFn: async (credentials) => {
       const result = await Promise.race<AuthResponse>([
         authApi.login(credentials),
