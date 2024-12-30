@@ -284,32 +284,53 @@ export class SessionService {
   }
 
   async getUserSessions(userId: string): Promise<string[]> {
-    const sessions = await this.redisService.keys(`${this.SESSION_PREFIX}*`);
-    const userSessions = [];
+    try {
+      const sessions = await this.redisService.keys(`${this.SESSION_PREFIX}*`);
+      const userSessions = [];
 
-    for (const session of sessions) {
-      const data = await this.redisService.get(session);
-      if (data) {
-        const parsed = JSON.parse(data);
-        if (parsed.userId === userId) {
-          userSessions.push(session.replace(this.SESSION_PREFIX, ''));
+      for (const sessionKey of sessions) {
+        const data = await this.redisService.get(sessionKey);
+        if (data) {
+          try {
+            const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+            if (parsed.userId === userId) {
+              userSessions.push(sessionKey.replace(this.SESSION_PREFIX, ''));
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Failed to parse session data for key ${sessionKey}`,
+            );
+            continue;
+          }
         }
       }
-    }
 
-    return userSessions;
+      return userSessions;
+    } catch (error) {
+      this.logger.error('Error getting user sessions:', error);
+      return [];
+    }
   }
 
   async revokeAllUserSessions(
     userId: string,
     exceptSessionId?: string,
   ): Promise<void> {
-    const sessions = await this.getUserSessions(userId);
+    try {
+      const sessions = await this.getUserSessions(userId);
 
-    for (const sessionId of sessions) {
-      if (sessionId !== exceptSessionId) {
-        await this.destroySession(sessionId);
+      for (const sessionId of sessions) {
+        if (sessionId !== exceptSessionId) {
+          try {
+            await this.destroySession(sessionId);
+          } catch (error) {
+            this.logger.warn(`Failed to destroy session ${sessionId}:`, error);
+          }
+        }
       }
+    } catch (error) {
+      this.logger.error('Failed to revoke all user sessions:', error);
+      throw new Error('Failed to revoke all user sessions');
     }
   }
 

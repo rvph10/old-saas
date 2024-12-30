@@ -49,6 +49,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   const resetPassword = useResetPassword();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const form = useForm<ResetPasswordInput>({
     resolver: zodResolver(resetPasswordSchema),
@@ -75,9 +76,10 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
 
       router.push('/auth/login');
     } catch (error: any) {
+      setError(error.details);
       toast({
-        title: 'Error',
-        description: error.message || 'Something went wrong. Please try again.',
+        title: error.message,
+        description: error.details || 'Something went wrong. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -150,7 +152,7 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
               </FormItem>
             )}
           />
-
+          {error && <p className="text-center text-sm text-red-500">{error}</p>}
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading && (
               <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />

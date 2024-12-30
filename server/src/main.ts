@@ -1,13 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import * as expressSession from 'express-session';
+import session, * as expressSession from 'express-session';
 import * as cookieParser from 'cookie-parser';
 import { CustomLoggerService } from '@infrastructure/logger/logger.service';
 import { MetricsService } from '@infrastructure/monitoring/metrics.service';
 import { GlobalExceptionFilter } from '@core/filters/global-exception.filter';
 import { RedisStore } from 'connect-redis';
 import { createClient } from 'redis';
+
+declare module 'express-session' {
+  interface SessionData {
+    touch: () => void;
+    [key: string]: any;
+  }
+}
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -45,7 +52,7 @@ async function bootstrap() {
   const metricsService = app.get(MetricsService);
   const redisClient = createClient({
     url: process.env.REDIS_URL || 'redis://redis:6379',
-    legacyMode: false,
+    legacyMode: false
   });
 
   await redisClient.connect().catch((err) => {

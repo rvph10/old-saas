@@ -28,6 +28,7 @@ import { HealthModule } from '@modules/health/health.module';
 import { ErrorHandlingService, ErrorModule } from '@core/errors';
 import { HealthController } from '@modules/health/health.controller';
 import { CsrfMiddleware } from '@core/middleware/csrf.middleware';
+import { ErrorHandlingMiddleware } from '@core/middleware/error-handling.middleware';
 
 @Module({
   imports: [
@@ -71,6 +72,10 @@ export class AppModule implements NestModule {
 
     // 2. Security middleware
     consumer.apply(RequestSanitizerMiddleware).forRoutes('*');
+
+    consumer
+      .apply(ErrorHandlingMiddleware)
+      .forRoutes('*');
 
     consumer
       .apply(CsrfMiddleware)

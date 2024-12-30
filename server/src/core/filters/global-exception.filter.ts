@@ -25,36 +25,40 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     let errorResponse: ErrorResponse;
 
-    if (exception instanceof AppError) {
-      errorResponse = this.handleAppError(exception);
-    } else if (exception instanceof HttpException) {
-      errorResponse = this.handleHttpException(exception);
-    } else {
-      errorResponse = {
+    try {
+      if (exception instanceof AppError) {
+        errorResponse = this.handleAppError(exception);
+      } else if (exception instanceof HttpException) {
+        errorResponse = this.handleHttpException(exception);
+      } else {
+        errorResponse = {
+          code: 'INTERNAL_ERROR',
+          message: 'Internal server error',
+          timestamp: new Date().toISOString(),
+          details: process.env.NODE_ENV === 'development' 
+            ? { error: exception instanceof Error ? exception.message : 'Unknown error' }
+            : undefined
+        };
+      }
+
+      errorResponse.path = request.url;
+
+      // Log error
+      this.logError(request, errorResponse, exception);
+
+      // Track metrics
+      this.trackErrorMetrics(Number(errorResponse.code), request.path);
+
+      // Send response without touching session
+      response.status(this.getHttpStatus(exception)).json(errorResponse);
+    } catch (error) {
+      this.logger.error('Error in exception filter:', error);
+      response.status(500).json({
         code: 'INTERNAL_ERROR',
         message: 'Internal server error',
-        timestamp: new Date().toISOString(),
-        details:
-          process.env.NODE_ENV === 'development'
-            ? {
-                error:
-                  exception instanceof Error
-                    ? exception.message
-                    : 'Unknown error',
-              }
-            : undefined,
-      };
+        timestamp: new Date().toISOString()
+      });
     }
-
-    errorResponse.path = request.url;
-
-    // Log error
-    this.logError(request, errorResponse, exception);
-
-    // Track metrics
-    this.trackErrorMetrics(Number(errorResponse.code), request.path);
-
-    response.status(this.getHttpStatus(exception)).json(errorResponse);
   }
 
   private handleAppError(error: AppError) {

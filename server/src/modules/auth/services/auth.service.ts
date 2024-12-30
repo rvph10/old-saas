@@ -780,10 +780,7 @@ export class AuthService {
     );
   }
 
-  async resetPassword(
-    resetDto: ResetPasswordDto,
-    response: Response<any, Record<string, any>>,
-  ) {
+  async resetPassword(resetDto: ResetPasswordDto, response: Response) {
     return await this.performanceService.measureAsync(
       'resetPassword',
       async () => {
@@ -805,18 +802,46 @@ export class AuthService {
           await this.checkPasswordHistory(userId, resetDto.password);
 
           const hashedPassword = await bcrypt.hash(resetDto.password, 10);
+
+          // Update password
           await this.prisma.user.update({
             where: { id: userId },
             data: { password: hashedPassword },
           });
-          this.sessionService.revokeAllUserSessions(userId);
-          response.clearCookie('auth_token', this.cookieOptions);
 
+          // Save password history
+          await this.savePasswordToHistory(userId, hashedPassword);
+
+          try {
+            // Attempt to revoke sessions but don't block on failure
+            await this.sessionService.revokeAllUserSessions(userId);
+          } catch (error) {
+            this.logger.warn(
+              'Failed to revoke sessions during password reset:',
+              error,
+            );
+          }
+
+          // Clear cookies
+          response.clearCookie('access_token', {
+            ...this.cookieConfigService.defaultOptions,
+            maxAge: undefined,
+          });
+          response.clearCookie('refresh_token', {
+            ...this.cookieConfigService.defaultOptions,
+            maxAge: undefined,
+          });
+
+          // Remove the reset token
           await this.redisService.del(`pwd_reset:${resetDto.token}`);
+
           return { message: 'Password successfully reset' };
         } catch (error) {
-          this.logger.error('Request Password Reset error', error.stack);
-          throw error;
+          if (error instanceof AppError) {
+            throw error;
+          }
+          this.logger.error('Password reset error:', error);
+          throw new InternalServerErrorException('Failed to reset password');
         }
       },
     );
